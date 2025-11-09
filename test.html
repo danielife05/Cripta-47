@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Básico</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+        }
+        .status {
+            border: 1px solid #0f0;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Módulos del Juego</h1>
+    <div id="status"></div>
+    
+    <script type="module">
+        const statusDiv = document.getElementById('status');
+        
+        function log(msg) {
+            statusDiv.innerHTML += `<div class="status">${msg}</div>`;
+            console.log(msg);
+        }
+        
+        log('1. Cargando módulos...');
+        
+        try {
+            await import('./game/level_data.js');
+            log('✓ level_data.js cargado');
+        } catch(e) {
+            log('✗ Error en level_data.js: ' + e.message);
+        }
+        
+        try {
+            await import('./game/pathfinding.js');
+            log('✓ pathfinding.js cargado');
+        } catch(e) {
+            log('✗ Error en pathfinding.js: ' + e.message);
+        }
+        
+        try {
+            await import('./game/units.js');
+            log('✓ units.js cargado');
+        } catch(e) {
+            log('✗ Error en units.js: ' + e.message);
+        }
+        
+        try {
+            await import('./game/input.js');
+            log('✓ input.js cargado');
+        } catch(e) {
+            log('✗ Error en input.js: ' + e.message);
+        }
+        
+        try {
+            await import('./game/game.js');
+            log('✓ game.js cargado');
+            
+            if (window.Game) {
+                log('✓ window.Game disponible');
+                log('Game properties: ' + Object.keys(window.Game).join(', '));
+            } else {
+                log('✗ window.Game NO disponible');
+            }
+        } catch(e) {
+            log('✗ Error en game.js: ' + e.message);
+        }
+        
+        log('2. Test completado');
+    </script>
+</body>
+</html>

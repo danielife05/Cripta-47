@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>Cripta 47: El Amanecer de las Sombras</title>
+    <link rel="stylesheet" href="./styles/style.css" />
+  </head>
+  <body>
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <div id="game-container">
+      <div id="loader-screen" class="game-screen visible">
+        <h1>CARGANDO RECURSOS...</h1>
+        <p>Protocolo 47: Inicializando sistemas de contención.</p>
+      </div>
+
+      <div id="menu-screen" class="game-screen hidden">
+        <h1>CRIPTA 47: EL AMANECER DE LAS SOMBRAS</h1>
+        <p>
+          Arcade Shooter cenital 2D en una instalación invadida por zombis.
+          Gestiona la luz, controla multitudes y escapa.
+        </p>
+        <button onclick="Game.startGame()">INICIAR</button>
+
+        <p style="opacity: 0.8; margin-top: 12px">
+          Controles: WASD para moverte • Mouse para apuntar • Clic para
+          disparar.
+        </p>
+      </div>
+
+      <div id="hud" style="display: none">
+        <div id="timer-overlay"><span id="timer">05:00</span></div>
+        <div id="resource-panel">
+          VIDAS: <span id="lives">3</span> | LLAVES:
+          <span id="keys">0/3</span> | SCORE: <span id="score">0</span> | NIVEL
+          DE AMENAZA: <span id="threat">1</span>
+        </div>
+      </div>
+
+      <div id="gameover-screen" class="game-screen hidden">
+        <h1>PROTOCOLO FALLIDO</h1>
+        <p>Has sucumbido en la cripta. ¿Intentar de nuevo?</p>
+        <div>
+          <button onclick="Game.startGame()">REINTENTAR</button>
+          <button onclick="Game.init()">VOLVER AL MENÚ</button>
+        </div>
+      </div>
+      <div id="alert-layer"></div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

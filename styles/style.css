@@ -1,0 +1,182 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Courier New', monospace;
+    color: white;
+    /* Evita el scroll innecesario */
+    user-select: none;
+    /* Deshabilita la selección de texto */
+    -webkit-tap-highlight-color: transparent;
+    /* Mejora la experiencia táctil */
+}
+
+#game {
+    display: block;
+    margin: 0 auto; /* centrar horizontalmente */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* centrar en pantalla */
+    border: 1px solid #444;
+    background: #16191f; /* un poco más claro */
+}
+
+#game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    /* Permite clics "pasar" al canvas a menos que sea un elemento visible */
+}
+
+.game-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    display: none; /* Por defecto oculto */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    pointer-events: all;
+    z-index: 100;
+}
+#resource-panel {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 15px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid #394e5a;
+    font-size: 1.05rem;
+    color: #d7e3ef;
+}
+.hidden {
+    display: none !important;
+}
+
+.visible {
+    display: flex !important;
+}
+#menu-screen {
+    /* Fondo oscuro con atmósfera de instalación */
+    background: 
+        radial-gradient(ellipse at 30% 40%, rgba(26,32,38,0.4) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 60%, rgba(42,50,56,0.3) 0%, transparent 50%),
+        linear-gradient(180deg, rgba(13,17,23,0.9) 0%, rgba(29,38,46,0.95) 100%);
+    background-color: #0a0e12;
+}
+
+/* HUD y Paneles */
+#hud {
+    pointer-events: all;
+    /* Hace el HUD interactivo */
+}
+
+/* panel HUD duplicado arriba se mantiene posicionado por regla anterior */
+
+#command-panel {
+    display: none; /* eliminado */
+}
+
+#command-panel button {
+    padding: 10px 15px;
+    background: #2a4;
+    color: white;
+    border: 2px solid #4c6;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s;
+}
+
+#command-panel button:hover:not(:disabled) {
+    background: #3b5;
+    border-color: #6e8;
+}
+
+#command-panel button:disabled {
+    background: #222;
+    color: #555;
+    border-color: #333;
+    cursor: not-allowed;
+}
+
+/* Botones en las pantallas del juego */
+button {
+    padding: 12px 24px;
+    background: #2a4;
+    color: white;
+    border: 2px solid #4c6;
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-family: 'Courier New', monospace;
+    margin: 10px;
+    transition: all 0.2s;
+}
+
+button:hover {
+    background: #3b5;
+    border-color: #6e8;
+    transform: scale(1.05);
+}
+
+/* Para la selección de unidades */
+.selection-box {
+    border: 1px dashed lime;
+    background-color: rgba(0, 255, 0, 0.1);
+    position: absolute;
+    pointer-events: none;
+}
+
+/* Alert overlay */
+#alert-layer {
+    position: fixed;
+    top:0;left:0;right:0;bottom:0;
+    pointer-events:none;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    padding-top:100px;
+    z-index:150;
+    font-family:'Courier New', monospace;
+}
+.game-alert {
+    background: rgba(180,0,0,0.18);
+    border:2px solid #ff4444;
+    color:#ffdddd;
+    padding:14px 22px;
+    font-size:1.3rem;
+    text-shadow:0 0 6px #ff4444;
+    animation: alertFade 2.3s ease forwards;
+}
+@keyframes alertFade {
+    0% { transform:translateY(-20px); opacity:0; }
+    10% { transform:translateY(0); opacity:1; }
+    80% { opacity:1; }
+    100% { opacity:0; }
+}
+
+/* Timer centrado arriba */
+#timer-overlay{
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 140;
+    pointer-events: none;
+}
+#timer-overlay #timer{
+    color: #ffffff;
+    font-size: 2rem;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(255,255,255,0.35);
+}
