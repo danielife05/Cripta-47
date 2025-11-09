@@ -2,8 +2,10 @@
 import './game/game.js';
 
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const ctx = canvas ? canvas.getContext("2d") : null;
 let last = 0;
+
+// Validación básica del canvas
 
 function loop(ts) {
   // Calcula el tiempo transcurrido (dt) en segundos
@@ -21,13 +23,16 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-// Esperar a que el DOM esté completamente cargado
-window.addEventListener('DOMContentLoaded', () => {
-  // Verificar que Game esté disponible
+function boot() {
   if (window.Game) {
     window.Game.init("game");
     requestAnimationFrame(loop);
   } else {
-    console.error("Game object not found!");
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}

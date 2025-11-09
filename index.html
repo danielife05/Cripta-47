@@ -13,44 +13,63 @@
     <canvas id="game" width="960" height="540"></canvas>
 
     <div id="game-container">
-      <div id="loader-screen" class="game-screen visible">
-        <h1>CARGANDO RECURSOS...</h1>
-        <p>Protocolo 47: Inicializando sistemas de contención.</p>
+      <div id="menu-screen" class="game-screen visible">
+        <div class="menu-inner">
+          <div class="title-cluster">
+            <h1 class="game-title" data-text="CRIPTA 47">CRIPTA 47</h1>
+            <h2 class="game-sub">El Amanecer de las Sombras</h2>
+          </div>
+          <div class="slogan">Ilumina. Sobrevive.</div>
+          <button
+            id="start-button"
+            class="start-btn"
+            aria-label="Iniciar Misión"
+          >
+            <span class="btn-bg"></span>
+            <span class="btn-text">INICIAR MISIÓN</span>
+          </button>
+          <div class="controls">
+            <div><span>Movimiento</span><strong>W A S D</strong></div>
+            <div><span>Apunta</span><strong>Mouse</strong></div>
+            <div><span>Dispara</span><strong>Clic Izquierdo</strong></div>
+          </div>
+        </div>
+        <div class="ambient-lights">
+          <div class="al orb1"></div>
+          <div class="al orb2"></div>
+          <div class="al orb3"></div>
+        </div>
+        <div class="scanlines"></div>
+        <div class="noise-layer"></div>
       </div>
 
-      <div id="menu-screen" class="game-screen hidden">
-        <h1>CRIPTA 47: EL AMANECER DE LAS SOMBRAS</h1>
-        <p>
-          Arcade Shooter cenital 2D en una instalación invadida por zombis.
-          Gestiona la luz, controla multitudes y escapa.
-        </p>
-        <button onclick="Game.startGame()">INICIAR</button>
-
-        <p style="opacity: 0.8; margin-top: 12px">
-          Controles: WASD para moverte • Mouse para apuntar • Clic para
-          disparar.
-        </p>
-      </div>
-
-      <div id="hud" style="display: none">
-        <div id="timer-overlay"><span id="timer">05:00</span></div>
-        <div id="resource-panel">
-          VIDAS: <span id="lives">3</span> | LLAVES:
-          <span id="keys">0/3</span> | SCORE: <span id="score">0</span> | NIVEL
-          DE AMENAZA: <span id="threat">1</span>
+      <div id="hud" class="hidden">
+        <div id="hud-vitals">Vidas: <span id="hud-lives">3</span></div>
+        <div id="hud-objectives">Llaves: <span id="hud-keys">0</span></div>
+        <div id="hud-timer">Tiempo: <span id="hud-time">5:00</span></div>
+        <div id="hud-alert" class="hidden">
+          ¡ADVERTENCIA! ¡La horda se está volviendo más rápida!
         </div>
       </div>
 
       <div id="gameover-screen" class="game-screen hidden">
-        <h1>PROTOCOLO FALLIDO</h1>
-        <p>Has sucumbido en la cripta. ¿Intentar de nuevo?</p>
-        <div>
-          <button onclick="Game.startGame()">REINTENTAR</button>
-          <button onclick="Game.init()">VOLVER AL MENÚ</button>
-        </div>
+        <h1>GAME OVER</h1>
+        <p id="gameover-message">Has sido eliminado.</p>
+        <button id="restart-button">MENÚ PRINCIPAL</button>
       </div>
-      <div id="alert-layer"></div>
     </div>
+
+    <div
+      id="alert-layer"
+      style="
+        position: fixed;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        pointer-events: none;
+      "
+    ></div>
 
     <script type="module" src="./main.js"></script>
   </body>

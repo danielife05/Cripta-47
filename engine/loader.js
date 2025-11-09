@@ -1,37 +1,50 @@
-// Sistema de carga de recursos del juego
-export class Loader {
-    constructor() {
-        this.resources = {};
-        this.loaded = 0;
-        this.total = 0;
-    }
+/**
+ * @file engine/loader.js
+ * Módulo para cargar assets (imágenes, audio).
+ * Utiliza promesas para manejar la carga asíncrona.
+ *
+ */
 
-    // Simula la carga de recursos (imágenes, sonidos, etc.)
-    loadResources(resourceList, onComplete) {
-        this.total = resourceList.length;
-        
-        if (this.total === 0) {
-            // Si no hay recursos, completar inmediatamente
-            onComplete();
-            return;
+export const Loader = {
+    // Almacenará los assets cargados (Image objects)
+    assets: {},
+
+    /**
+     * Carga un conjunto de definiciones de assets.
+     * @param {object} assetDefinitions - Objeto con claves de asset y sus rutas.
+     */
+    async loadAssets(assetDefinitions) {
+        const loadPromises = [];
+
+        console.log("Loader: Iniciando carga de assets...");
+
+        for (const key in assetDefinitions) {
+            const def = assetDefinitions[key];
+            const img = new Image();
+            img.src = def.src;
+
+            const promise = new Promise((resolve, reject) => {
+                img.onload = () => {
+                    // Almacena la imagen cargada junto con sus definiciones (tamaño de frame)
+                    this.assets[key] = {
+                        img: img,
+                        frameWidth: def.frameWidth,
+                        frameHeight: def.frameHeight,
+                        animations: def.animations
+                    };
+                    console.log(`Loader: Asset '${key}' cargado desde ${def.src}`);
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.error(`Error cargando asset '${key}' desde ${def.src}`);
+                    reject(new Error(`Error cargando ${key}`));
+                };
+            });
+            loadPromises.push(promise);
         }
 
-        resourceList.forEach(resource => {
-            // Simulación de carga asíncrona
-            setTimeout(() => {
-                this.resources[resource.name] = resource;
-                this.loaded++;
-                
-                if (this.loaded === this.total) {
-                    onComplete();
-                }
-            }, Math.random() * 500 + 100); // Simula tiempo de carga aleatorio
-        });
+        // Espera a que todas las promesas de carga se completen
+        await Promise.all(loadPromises);
+        console.log("Loader: Todos los assets cargados.");
     }
-
-    getProgress() {
-        return this.total > 0 ? this.loaded / this.total : 1;
-    }
-}
-
-export default new Loader();
+};

@@ -1,5 +1,4 @@
 // Constantes para Arcade Shooter: Protocolo 47
-// Constantes para Arcade Shooter: Protocolo 47
 export const GAME_CONSTANTS = {
   // Canvas visible (ventana de cámara)
   CANVAS_WIDTH: 960,
@@ -8,7 +7,7 @@ export const GAME_CONSTANTS = {
   WORLD_WIDTH: 3200,
   WORLD_HEIGHT: 2400,
   // Tiempo límite de partida
-  MAX_GAME_TIME: 300, // 5 minutos (300 segundos)
+  MAX_GAME_TIME: 360, // 6 minutos (360 segundos)
   DIFFICULTY_INCREASE_TIME: 120, // 2 minutos (120 segundos)
   
   PLAYER: {
@@ -119,3 +118,4 @@ export const MAP = {
   ],
   exit: { x: 3050, y: 2100, w: 100, h: 80 } // puerta de salida
 };
+

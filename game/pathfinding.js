@@ -1,6 +1,3 @@
-// Implementación simplificada del algoritmo A* para la cuadrícula del juego.
-// Adaptado para trabajar con la matriz de obstáculos del juego.
-
 export const Pathfinding = {
     // Nodo para el algoritmo A*
     Node: function(parent, point, gScore, hScore) {

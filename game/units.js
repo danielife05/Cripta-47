@@ -10,44 +10,41 @@ export class Player {
     this.fireCooldown = 0;
     this.keys = 0; // llaves recogidas
     this.vx = 0; this.vy = 0; // velocidad
+    // Parámetros de dibujo
+    this.width = 42;
+    this.height = 42;
   }
+  // Actualizar movimiento del jugador, ángulos y disparo
   update(dt, input, bullets, camera) {
     const maxSpeed = GAME_CONSTANTS.PLAYER.SPEED;
-    // Dirección de entrada
     let ix = 0, iy = 0;
     if (input.keys.has('w') || input.keys.has('arrowup')) iy -= 1;
     if (input.keys.has('s') || input.keys.has('arrowdown')) iy += 1;
     if (input.keys.has('a') || input.keys.has('arrowleft')) ix -= 1;
     if (input.keys.has('d') || input.keys.has('arrowright')) ix += 1;
-    // Aceleración + amortiguación
     const len = Math.hypot(ix, iy) || 1;
-    const ax = (ix/len) * (maxSpeed * 6); // aceleración hacia la dirección
+    const ax = (ix/len) * (maxSpeed * 6);
     const ay = (iy/len) * (maxSpeed * 6);
-    const damping = 6; // amortiguación
+    const damping = 6;
     this.vx += (ax - this.vx * damping) * dt;
     this.vy += (ay - this.vy * damping) * dt;
-    // Limitar velocidad
     const vlen = Math.hypot(this.vx, this.vy);
     if (vlen > maxSpeed) { this.vx = (this.vx / vlen) * maxSpeed; this.vy = (this.vy / vlen) * maxSpeed; }
-    // Integrar posición
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    // Clamp dentro del mundo
     this.x = Math.max(40, Math.min(GAME_CONSTANTS.WORLD_WIDTH - 40, this.x));
     this.y = Math.max(40, Math.min(GAME_CONSTANTS.WORLD_HEIGHT - 40, this.y));
 
-    // Rotación del sprite: sigue la dirección de movimiento (suavizada)
-    if (Math.hypot(this.vx, this.vy) > 10) {
+    const moving = Math.hypot(this.vx, this.vy) > 10;
+    if (moving) {
       const targetAngle = Math.atan2(this.vy, this.vx);
       let diff = targetAngle - this.angle;
-      // Normalizar diferencia a [-PI, PI]
       while (diff > Math.PI) diff -= 2*Math.PI;
       while (diff < -Math.PI) diff += 2*Math.PI;
-      this.angle += diff * 8 * dt; // interpolación suave
+      this.angle += diff * 8 * dt;
     }
 
-    // Ángulo de puntería hacia el mouse (para disparar)
     const m = input.getMouseWorld(camera.x, camera.y);
     this.aimAngle = Math.atan2(m.y - this.y, m.x - this.x);
 
@@ -65,59 +62,64 @@ export class Player {
 
     if (this.invuln > 0) this.invuln -= dt;
   }
+  // Dibujar jugador (forma vectorial) centrado en cámara
   draw(ctx, camera) {
-    const sx = this.x - camera.x;
-    const sy = this.y - camera.y;
-    // Nuevo sprite canvas simple (evita superposición de modelos): cápsula + arma frontal
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(this.angle);
-    // cuerpo principal
+    const sxWorld = this.x - camera.x;
+    const syWorld = this.y - camera.y;
     ctx.fillStyle = COLORS.PLAYER;
     ctx.beginPath();
-    ctx.roundRect(-12, -8, 24, 16, 6);
+    ctx.arc(sxWorld, syWorld, 18, 0, Math.PI*2);
     ctx.fill();
-    // sombreado ligero
-    const grad = ctx.createLinearGradient(-12, 0, 12, 0);
-    grad.addColorStop(0, 'rgba(255,255,255,0.15)');
-    grad.addColorStop(0.5, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.roundRect(-12, -8, 24, 16, 6);
-    ctx.fill();
-    // arma (rectángulo blanco)
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(2, -3, 16, 6);
-    // parpadeo invulnerable overlay
     if (this.invuln > 0) {
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = '#ffffff';
-      ctx.roundRect(-14, -10, 28, 20, 8);
-      ctx.fill();
+      ctx.save();
+      ctx.globalAlpha = 0.35; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(sxWorld, syWorld, 24, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
     }
-    ctx.restore();
   }
 }
 
 export class Enemy {
-  constructor(x, y) {
+  constructor(x, y, variant = 0) {
     this.x = x; this.y = y; this.hp = GAME_CONSTANTS.ENEMY.HP;
-    this.alive = true;
+    this.state = 'alive'; // alive -> dying -> dead
+    this.deathTimer = 0; // cuenta regresiva para desvanecimiento
     this.r = GAME_CONSTANTS.ENEMY.RADIUS;
+    this.variant = variant; // 0..4
+    this.angle = 0;
   }
+  // Actualizar movimiento del enemigo hacia el jugador
   update(dt, player, isInLight, speedScale=1) {
+    if(this.state === 'dying'){
+      this.deathTimer -= dt;
+      if(this.deathTimer <= 0){ this.state = 'dead'; }
+      return; // no se mueve mientras muere
+    }
+    if(this.state !== 'alive') return;
     const base = isInLight ? GAME_CONSTANTS.ENEMY.SPEED_LIGHT : GAME_CONSTANTS.ENEMY.SPEED_DARK;
     const speed = base * speedScale;
     const dx = player.x - this.x, dy = player.y - this.y;
     const len = Math.hypot(dx, dy) || 1;
-    this.x += (dx/len) * speed * dt;
-    this.y += (dy/len) * speed * dt;
+    const vx = (dx/len) * speed;
+    const vy = (dy/len) * speed;
+    this.x += vx * dt;
+    this.y += vy * dt;
+    this.angle = Math.atan2(vy, vx);
   }
+  kill(){
+    if(this.state !== 'alive') return;
+    this.state = 'dying';
+    this.deathTimer = 1.2; // segundos para desvanecerse
+  }
+  // Dibujar enemigo (forma vectorial)
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
-    // Nuevo diseño enemigo: forma amorfa con contorno
     ctx.save();
     ctx.translate(sx, sy);
+    let alpha = 1;
+    if(this.state === 'dying') alpha = Math.max(0, this.deathTimer / 1.2);
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = COLORS.ENEMY;
     ctx.beginPath();
     ctx.moveTo(0, -this.r);
@@ -141,15 +143,17 @@ export class Enemy {
 }
 
 export class Bullet {
-  // x,y: cabeza del trazo; dirx,diry unitario; speed px/s; length px
+  // Proyectil: x,y cabeza; dirx,diry unitario; speed px/s; length px
   constructor(x, y, dirx, diry, speed, damage) {
     this.x=x; this.y=y; this.dx=dirx; this.dy=diry; this.speed=speed; this.damage=damage; this.life=0.3; this.length=24;
   }
+  // Actualizar movimiento/vida del proyectil
   update(dt) {
     this.x += this.dx * this.speed * dt;
     this.y += this.dy * this.speed * dt;
     this.life -= dt;
   }
+  // Dibujar proyectil como trazo luminoso
   draw(ctx, camera) {
     const hx = this.x - camera.x;
     const hy = this.y - camera.y;
