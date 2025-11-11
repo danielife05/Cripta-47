@@ -48,7 +48,3 @@ Sin cambios en las mecánicas originales ni parámetros principales.
 
 ### Ejecución
 Abrir `index.html` en un servidor estático (recomendado) o directamente en el navegador moderno. Si el audio no suena inicialmente, realizar una interacción (click en el botón) para permitir contexto de Audio.
-
-### Licencia
-Uso académico / personal. Ajustar según necesidad.
-
