@@ -1,3 +1,6 @@
+/**
+ * Módulo de entrada: teclado, mouse y touch con coordenadas de mundo.
+ */
 export const Input = {
   canvas: null,
   ctx: null,

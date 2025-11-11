@@ -1,3 +1,8 @@
+/**
+ * Sistema de Audio con WebAudio API.
+ * Maneja carga de buffers, loops de menú/juego y efectos (llaves, salida,
+ * victoria/derrota) además de ambient aleatorio y disparadores por proximidad.
+ */
 export const Audio = {
   ctx: null,
   master: null,

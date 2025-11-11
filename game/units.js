@@ -1,5 +1,10 @@
 import { GAME_CONSTANTS, COLORS } from './level_data.js';
 
+/**
+ * Clases de entidad: Player, Enemy, Bullet.
+ * Mantienen lógica de movimiento y dibujo vectorial.
+ */
+
 export class Player {
   constructor(x, y) {
     this.x = x; this.y = y;

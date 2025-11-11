@@ -3,6 +3,35 @@ import { GAME_CONSTANTS, LEVELS, COLORS, MAP } from './level_data.js';
 import { Player, Enemy } from './units.js';
 import { Audio } from './audio.js';
 
+
+// Utilidad DOM mínima
+const $ = (id) => document.getElementById(id);
+
+// IDs UI usados repetidamente
+const UI_IDS = {
+    MENU: 'menu-screen',
+    HUD: 'hud',
+    OVER: 'gameover-screen',
+    LIVES: 'hud-lives',
+    KEYS: 'hud-keys',
+    TIME: 'hud-time',
+    ALERT_LAYER: 'alert-layer',
+};
+
+// Tiempo
+const nowMs = () => (performance.now ? performance.now() : Date.now());
+
+// Fisher–Yates
+function shuffleInPlace(arr, randFn=Math.random){
+    for(let i=arr.length-1;i>0;i--){
+        const j = Math.floor(randFn()*(i+1));
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+    return arr;
+}
+
 // Objeto principal del juego (limpio y unificado)
 window.Game = {
   canvas: null, ctx: null,
@@ -37,9 +66,8 @@ window.Game = {
             this.initUIManager(); 
             Audio.init(); 
             this.setState('MENU'); 
-            setTimeout(()=>{ 
-                try{ Audio.playMenuAmbient(); }catch(_){} 
-            }, 200);
+            // Diferido para evitar bloqueo de primer frame de audio.
+            setTimeout(()=>{ try{ Audio.playMenuAmbient(); }catch(_){} }, 200);
         });
   },
 
@@ -59,7 +87,7 @@ window.Game = {
   // Botones UI
     initUIManager(){ 
         const bind=(id,fn)=>{ 
-            const el=document.getElementById(id); 
+            const el=$(id); 
             if(el && !el.dataset.bound){ 
                 el.dataset.bound='1'; 
                 el.addEventListener('click',e=>{
@@ -76,10 +104,10 @@ window.Game = {
   // Cambio estado
     setState(st){ 
         this.currentState=st; 
-        const menu=document.getElementById('menu-screen'); 
-        const hud=document.getElementById('hud'); 
-        const over=document.getElementById('gameover-screen'); 
-        const container=document.getElementById('game-container'); 
+        const menu=$(UI_IDS.MENU); 
+        const hud=$(UI_IDS.HUD); 
+        const over=$(UI_IDS.OVER); 
+        const container=$('game-container'); 
         const canvas=this.canvas; 
         [menu,hud,over].forEach(el=>{ if(el){ el.classList.add('hidden'); el.classList.remove('visible'); }}); 
         switch(st){ 
@@ -117,48 +145,58 @@ window.Game = {
                 if(this.currentState!=='GAME' || !this.player) return;
                 if(!this.walls || !this.walls.length) this.walls=this.generateMazeWallsSeeded('SEMILLA');
                 this.gameTime+=dt;
-                const elapsedMin=Math.floor(this.gameTime/60);
-                if(elapsedMin!==this.lastEscalationMinute){
-                        this.lastEscalationMinute=elapsedMin; this.threatLevel=elapsedMin+1;
-                        this.spawnInterval=Math.max(1.2,this.spawnInterval*0.95);
-                        this.enemyScale=Math.min(1.8,this.enemyScale*1.06);
-                        if(elapsedMin>0){ this.spawnDifficultyAlertOnce('¡ADVERTENCIA! ¡La horda se está volviendo más rápida!'); this.spawnBurst(3,700,1100); }
-                }
+                this.applyDifficultyEscalation();
                 const remaining=Math.max(0,GAME_CONSTANTS.MAX_GAME_TIME - this.gameTime);
                 if(remaining<=0){ this.setGameOver('Tiempo agotado'); return; }
                 this.spawnTimer+=dt;
-                if(this.spawnTimer>=this.spawnInterval){
-                        this.spawnTimer=0; let batch=Math.min(3,1+Math.floor(this.threatLevel/3));
-                        batch=Math.min(batch,Math.max(0,this.maxEnemies - this.enemies.length));
-                        for(let i=0;i<batch;i++) this.spawnEnemy();
-                }
+                if(this.spawnTimer>=this.spawnInterval) this.handleEnemySpawning();
                 this.player.update(dt, Input, this.bullets, {x:this.cameraX,y:this.cameraY});
                 this.resolveEntityVsWalls(this.player,12);
                 this.updateCamera();
                 this.enemies.forEach(e=>{ const lit=this.isPointInLight(e.x,e.y); e.update(dt,this.player,lit,this.enemyScale); this.resolveEntityVsWalls(e,e.r); });
                 this.bullets.forEach(b=>b.update(dt));
-                // Colisión balas vs paredes
                 for(const b of this.bullets){ if(this.bulletHitsAnyWall(b)) b.life=0; }
                 this.bullets=this.bullets.filter(b=>b.life>0);
-                // Colisión balas vs enemigos
                 for(const e of this.enemies){ if(e.state!=='alive') continue; if(!this.isPointInLight(e.x,e.y)) continue; for(const b of this.bullets){ if(this.lineHitsCircle(b,e)){ e.hp-=b.damage; b.life=0; if(e.hp<=0){ e.kill(); this.score+=10; this.addSplat(e.x,e.y); } } } }
-                // limpiar muertos
                 this.enemies=this.enemies.filter(e=> e.state!=='dead');
-                // Sonido amenaza / proximidad (apZombie*) + ambiente zombi aleatorio
-                try{ let nearest=Infinity; for(const e of this.enemies){ if(e.state!=='alive') continue; const d=Math.hypot(e.x-this.player.x,e.y-this.player.y); if(d<nearest) nearest=d; } if(nearest<Infinity){ const RANGE=900; const f=Math.max(0,Math.min(1,1 - nearest/RANGE)); Audio.setThreatProximity(f); Audio.updateZombieAmbient(dt); } else { Audio.setThreatProximity(0); Audio.updateZombieAmbient(dt); } }catch(_){ }
-                // contacto cuerpo a cuerpo
-                let touching=false; for(const e of this.enemies){ if(e.state!=='alive') continue; if(Math.hypot(e.x - this.player.x, e.y - this.player.y) < e.r+10){ touching=true; break; } }
-                this.contactTimer=touching ? (this.contactTimer||0)+dt : 0; const HIT_PERIOD=0.4; while(this.contactTimer>=HIT_PERIOD){ this.contactTimer-=HIT_PERIOD; this.damagePlayer(1); if(this.currentState!=='GAME') break; }
-                // captura de llaves
-                const KEY_R=26, CAP_RATE=0.9; for(const k of this.keys){ if(k.collected) continue; k.capturing=false; const d=Math.hypot(k.x-this.player.x,k.y-this.player.y); if(d<KEY_R){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.4; k.progress+=CAP_RATE*f*dt; k.capturing=true; if(k.progress>=1){ k.progress=1; k.collected=true; this.player.keys=(this.player.keys||0)+1; try{Audio.playKeyPickup();}catch(_){ } this.spawnInterval=Math.max(0.75,this.spawnInterval*0.85); this.enemyScale=Math.min(2.0,this.enemyScale*1.08); this.spawnDifficultyAlertOnce('Llave capturada'); this.spawnBurst(Math.min(4,2+this.player.keys),650,1000);} } else if(k.progress>0) k.progress=Math.max(0,k.progress-0.25*dt); }
-                // spawn salida
-                if(!this.exitSpawned && this.player.keys>=3){ const ex=this.spawnRandomExit(); if(ex){ this.exit={...ex,progress:0,capturing:false,required:1}; this.exitSpawned=true; this.spawnDifficultyAlertOnce('¡SALIDA DISPONIBLE! Busca la puerta de escape.'); try{Audio.playDoorSpawn();}catch(_){ } } }
-                if(this.exit){ const RATE=0.18; const inExit=this.rectContainsPoint(this.exit,this.player.x,this.player.y); this.exit.capturing=false; if(inExit && this.isRectInLight(this.exit)){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.45; this.exit.progress+=RATE*f*dt; this.exit.capturing=true; if(this.exit.progress>=this.exit.required){ this.exit.progress=this.exit.required; // Secuencia: abrir salida (openExit) -> victoria
-                    try{Audio.playExitOpen();}catch(_){ }
-                    setTimeout(()=>{ this.setVictory(); try{Audio.playVictory();}catch(_){ } }, 900); }
-                } else if(this.exit.progress>0) this.exit.progress=Math.max(0,this.exit.progress-0.15*dt); }
-                // HUD
-                const livesEl=document.getElementById('hud-lives'); if(livesEl) livesEl.textContent=this.player.lives; const keysEl=document.getElementById('hud-keys'); if(keysEl) keysEl.textContent=`${this.player.keys||0}/3`; const timeEl=document.getElementById('hud-time'); if(timeEl){ const m=Math.floor(remaining/60); const s=Math.floor(remaining%60); timeEl.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
+                this.updateThreatAudio(dt);
+                this.resolveMeleeContact(dt);
+                this.updateKeys(dt);
+                this.updateExit(dt);
+                this.updateHUD(remaining);
+        },
+
+        // Helpers de Update
+        applyDifficultyEscalation(){
+            const elapsedMin=Math.floor(this.gameTime/60);
+            if(elapsedMin!==this.lastEscalationMinute){
+                this.lastEscalationMinute=elapsedMin; this.threatLevel=elapsedMin+1;
+                this.spawnInterval=Math.max(1.2,this.spawnInterval*0.95);
+                this.enemyScale=Math.min(1.8,this.enemyScale*1.06);
+                if(elapsedMin>0){ this.spawnDifficultyAlertOnce('¡ADVERTENCIA! ¡La horda se está volviendo más rápida!'); this.spawnBurst(3,700,1100); }
+            }
+        },
+        handleEnemySpawning(){
+            this.spawnTimer=0; let batch=Math.min(3,1+Math.floor(this.threatLevel/3));
+            batch=Math.min(batch,Math.max(0,this.maxEnemies - this.enemies.length));
+            for(let i=0;i<batch;i++) this.spawnEnemy();
+        },
+        updateThreatAudio(dt){
+            try{ let nearest=Infinity; for(const e of this.enemies){ if(e.state!=='alive') continue; const d=Math.hypot(e.x-this.player.x,e.y-this.player.y); if(d<nearest) nearest=d; } if(nearest<Infinity){ const RANGE=900; const f=Math.max(0,Math.min(1,1 - nearest/RANGE)); Audio.setThreatProximity(f); Audio.updateZombieAmbient(dt); } else { Audio.setThreatProximity(0); Audio.updateZombieAmbient(dt); } }catch(_){ }
+        },
+        resolveMeleeContact(dt){
+            let touching=false; for(const e of this.enemies){ if(e.state!=='alive') continue; if(Math.hypot(e.x - this.player.x, e.y - this.player.y) < e.r+10){ touching=true; break; } }
+            this.contactTimer=touching ? (this.contactTimer||0)+dt : 0; const HIT_PERIOD=0.4; while(this.contactTimer>=HIT_PERIOD){ this.contactTimer-=HIT_PERIOD; this.damagePlayer(1); if(this.currentState!=='GAME') break; }
+        },
+        updateKeys(dt){
+            const KEY_R=26, CAP_RATE=0.9; for(const k of this.keys){ if(k.collected) continue; k.capturing=false; const d=Math.hypot(k.x-this.player.x,k.y-this.player.y); if(d<KEY_R){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.4; k.progress+=CAP_RATE*f*dt; k.capturing=true; if(k.progress>=1){ k.progress=1; k.collected=true; this.player.keys=(this.player.keys||0)+1; try{Audio.playKeyPickup();}catch(_){ } this.spawnInterval=Math.max(0.75,this.spawnInterval*0.85); this.enemyScale=Math.min(2.0,this.enemyScale*1.08); this.spawnDifficultyAlertOnce('Llave capturada'); this.spawnBurst(Math.min(4,2+this.player.keys),650,1000);} } else if(k.progress>0) k.progress=Math.max(0,k.progress-0.25*dt); }
+            if(!this.exitSpawned && this.player.keys>=3){ const ex=this.spawnRandomExit(); if(ex){ this.exit={...ex,progress:0,capturing:false,required:1}; this.exitSpawned=true; this.spawnDifficultyAlertOnce('¡SALIDA DISPONIBLE! Busca la puerta de escape.'); try{Audio.playDoorSpawn();}catch(_){ } } }
+        },
+        updateExit(dt){
+            if(!this.exit) return; const RATE=0.18; const inExit=this.rectContainsPoint(this.exit,this.player.x,this.player.y); this.exit.capturing=false; if(inExit && this.isRectInLight(this.exit)){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.45; this.exit.progress+=RATE*f*dt; this.exit.capturing=true; if(this.exit.progress>=this.exit.required){ this.exit.progress=this.exit.required; try{Audio.playExitOpen();}catch(_){ } setTimeout(()=>{ this.setVictory(); try{Audio.playVictory();}catch(_){ } }, 900); } } else if(this.exit.progress>0) this.exit.progress=Math.max(0,this.exit.progress-0.15*dt); 
+        },
+        updateHUD(remaining){
+            const livesEl=$(UI_IDS.LIVES); if(livesEl) livesEl.textContent=this.player.lives; const keysEl=$(UI_IDS.KEYS); if(keysEl) keysEl.textContent=`${this.player.keys||0}/3`; const timeEl=$(UI_IDS.TIME); if(timeEl){ const m=Math.floor(remaining/60); const s=Math.floor(remaining%60); timeEl.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
         },
 
   // Cámara
@@ -257,15 +295,6 @@ window.Game = {
             ctx.fill(); 
         } 
         ctx.restore(); 
-        ctx.save(); 
-        ctx.globalCompositeOperation='source-over'; 
-        ctx.fillStyle='rgba(0,0,0,0.60)'; 
-        for(const w of this.getWalls()){ 
-            const sx=w.x-this.cameraX, sy=w.y-this.cameraY; 
-            if (sx+w.w<0||sy+w.h<0||sx>this.canvas.width||sy>this.canvas.height) continue; 
-            ctx.fillRect(sx,sy,w.w,w.h);
-        } 
-        ctx.restore(); 
     },
 
   // Punto iluminado
@@ -328,10 +357,11 @@ window.Game = {
   isRectInLight(r){ if(!r) return false; return this.isPointInLight(r.x + r.w/2, r.y + r.h/2); },
 
   // Spawn múltiple
-  spawnBurst(count,minDist=650,maxDist=1000){ for(let n=0;n<count;n++){ if(this.enemies.length>=this.maxEnemies) break; const ang=Math.random()*Math.PI*2; const dist=minDist+Math.random()*(maxDist-minDist); const x=this.player.x+Math.cos(ang)*dist; const y=this.player.y+Math.sin(ang)*dist; if(x<60||y<60||x>GAME_CONSTANTS.WORLD_WIDTH-60||y>GAME_CONSTANTS.WORLD_HEIGHT-60){ n--; continue; } if(this.isPointInLight(x,y)){ n--; continue; } let inside=false; for(const w of this.getWalls()){ if(this.rectContainsPoint(w,x,y)){ inside=true; break; } } if(inside){ n--; continue; } this.enemies.push(new Enemy(x,y,Math.floor(Math.random()*5))); } },
+    spawnBurst(count,minDist=650,maxDist=1000){ for(let n=0;n<count;n++){ if(this.enemies.length>=this.maxEnemies) break; const ang=Math.random()*Math.PI*2; const dist=minDist+Math.random()*(maxDist-minDist); const x=this.player.x+Math.cos(ang)*dist; const y=this.player.y+Math.sin(ang)*dist; if(!this.isValidEnemySpawn(x,y)){ n--; continue; } this.enemies.push(new Enemy(x,y,Math.floor(Math.random()*5))); } },
 
   // Spawn individual
-  spawnEnemy(){ if(this.enemies.length>=this.maxEnemies) return; for(let i=0;i<25;i++){ const x=40+Math.random()*(GAME_CONSTANTS.WORLD_WIDTH-80); const y=40+Math.random()*(GAME_CONSTANTS.WORLD_HEIGHT-80); if(Math.hypot(x-this.player.x,y-this.player.y) < GAME_CONSTANTS.ENEMY.MIN_SPAWN_DIST) continue; if(this.isPointInLight(x,y)) continue; let inside=false; for(const w of this.getWalls()){ if(this.rectContainsPoint(w,x,y)){ inside=true; break; } } if(inside) continue; this.enemies.push(new Enemy(x,y,Math.floor(Math.random()*5))); break; } },
+    spawnEnemy(){ if(this.enemies.length>=this.maxEnemies) return; for(let i=0;i<25;i++){ const x=40+Math.random()*(GAME_CONSTANTS.WORLD_WIDTH-80); const y=40+Math.random()*(GAME_CONSTANTS.WORLD_HEIGHT-80); if(!this.isValidEnemySpawn(x,y)) continue; this.enemies.push(new Enemy(x,y,Math.floor(Math.random()*5))); break; } },
+    isValidEnemySpawn(x,y){ if(Math.hypot(x-this.player.x,y-this.player.y) < GAME_CONSTANTS.ENEMY.MIN_SPAWN_DIST) return false; if(this.isPointInLight(x,y)) return false; if(x<60||y<60||x>GAME_CONSTANTS.WORLD_WIDTH-60||y>GAME_CONSTANTS.WORLD_HEIGHT-60) return false; for(const w of this.getWalls()){ if(this.rectContainsPoint(w,x,y)) return false; } return true; },
 
   // Daño
   damagePlayer(a){ this.player.lives-=a; if(this.player.lives<=0) this.setGameOver('Derrotado'); },
