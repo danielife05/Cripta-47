@@ -57,19 +57,17 @@ window.Game = {
   init(id='game') {
     this.canvas = document.getElementById(id);
     this.ctx = this.canvas.getContext('2d');
-    this.canvas.width = GAME_CONSTANTS.CANVAS_WIDTH;
+    this.canvas.width  = GAME_CONSTANTS.CANVAS_WIDTH;
     this.canvas.height = GAME_CONSTANTS.CANVAS_HEIGHT;
     Input.init(this.canvas, this.ctx);
     this.level = LEVELS[0];
-        this.loadAssets(() => { 
-            this.createProceduralPatterns(); 
-            this.initUIManager(); 
-            Audio.init(); 
-            this.setState('MENU'); 
-            // Diferido para evitar bloqueo de primer frame de audio.
-            setTimeout(()=>{ try{ Audio.playMenuAmbient(); }catch(_){} }, 200);
-        });
-  },
+
+    this.loadAssets(() => {
+        this.createProceduralPatterns();
+        this.initUIManager();
+        this.setState('MENU');
+    });
+    },
 
     loadAssets(done){
         const manifest = { soldier: 'assets/img/soldier.svg', zombie: 'assets/img/zombie.svg', exit: 'assets/img/exit.svg', key1: 'assets/img/key1.svg', key2: 'assets/img/key2.svg', key3: 'assets/img/key3.svg' };
@@ -98,6 +96,10 @@ window.Game = {
             } 
         }; 
         bind('start-button',()=>this.startGame()); 
+        bind('start-button', () => {try {Audio.init(); Audio.playMenuAmbient();
+        } catch(_) {}
+        this.startGame();
+        });
         bind('restart-button',()=>{ location.reload(); }); 
     },
 
@@ -132,7 +134,7 @@ window.Game = {
                 if(over){ over.classList.remove('hidden'); over.classList.add('visible'); } 
                 if(canvas) canvas.style.pointerEvents='none'; 
                 if(container) container.style.pointerEvents='auto'; 
-                try{ Audio.stopGameLoop(); Audio.playVictory(); }catch(_){} 
+                
                 break; 
         } 
     },
@@ -189,12 +191,78 @@ window.Game = {
             this.contactTimer=touching ? (this.contactTimer||0)+dt : 0; const HIT_PERIOD=0.4; while(this.contactTimer>=HIT_PERIOD){ this.contactTimer-=HIT_PERIOD; this.damagePlayer(1); if(this.currentState!=='GAME') break; }
         },
         updateKeys(dt){
-            const KEY_R=26, CAP_RATE=0.9; for(const k of this.keys){ if(k.collected) continue; k.capturing=false; const d=Math.hypot(k.x-this.player.x,k.y-this.player.y); if(d<KEY_R){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.4; k.progress+=CAP_RATE*f*dt; k.capturing=true; if(k.progress>=1){ k.progress=1; k.collected=true; this.player.keys=(this.player.keys||0)+1; try{Audio.playKeyPickup();}catch(_){ } this.spawnInterval=Math.max(0.75,this.spawnInterval*0.85); this.enemyScale=Math.min(2.0,this.enemyScale*1.08); this.spawnDifficultyAlertOnce('Llave capturada'); this.spawnBurst(Math.min(4,2+this.player.keys),650,1000);} } else if(k.progress>0) k.progress=Math.max(0,k.progress-0.25*dt); }
-            if(!this.exitSpawned && this.player.keys>=3){ const ex=this.spawnRandomExit(); if(ex){ this.exit={...ex,progress:0,capturing:false,required:1}; this.exitSpawned=true; this.spawnDifficultyAlertOnce('¡SALIDA DISPONIBLE! Busca la puerta de escape.'); try{Audio.playDoorSpawn();}catch(_){ } } }
+            const KEY_R = 26, CAP_RATE = 0.9;
+
+            for (const k of this.keys) {
+                if (k.collected) continue;
+
+                k.capturing = false;
+                const d = Math.hypot(k.x - this.player.x, k.y - this.player.y);
+
+                if (d < KEY_R) {
+                    const sp = Math.hypot(this.player.vx, this.player.vy);
+                    const f = sp < 25 ? 1 : 0.4;
+
+                    k.progress += CAP_RATE * f * dt;
+                    k.capturing = true;
+
+                    if (k.progress >= 1) {
+                        k.progress = 1;
+                        k.collected = true;
+
+                        this.player.keys = (this.player.keys || 0) + 1;
+                        try { Audio.playKeyPickup(); } catch (_) {}
+
+                        this.spawnInterval = Math.max(0.75, this.spawnInterval * 0.85);
+                        this.enemyScale   = Math.min(2.0,  this.enemyScale   * 1.08);
+
+                        this.spawnDifficultyAlertOnce('Llave capturada');
+                        this.spawnBurst(Math.min(4, 2 + this.player.keys), 650, 1000);
+                    }
+                } else if (k.progress > 0) {
+                    k.progress = Math.max(0, k.progress - 0.25 * dt);
+                }
+            }
+
+            // 🔁 Nuevo: eliminar del array las llaves ya recogidas,
+            // para que no se sigan dibujando en ningún sitio.
+            this.keys = this.keys.filter(k => !k.collected);
+
+            if (!this.exitSpawned && this.player.keys >= 3) {
+                const ex = this.spawnRandomExit();
+                if (ex) {
+                    this.exit = { ...ex, progress: 0, capturing: false, required: 1 };
+                    this.exitSpawned = true;
+                    this.spawnDifficultyAlertOnce('¡SALIDA DISPONIBLE! Busca la puerta de escape.');
+                    try { Audio.playDoorSpawn(); } catch (_) {}
+                }
+            }
         },
+
         updateExit(dt){
-            if(!this.exit) return; const RATE=0.18; const inExit=this.rectContainsPoint(this.exit,this.player.x,this.player.y); this.exit.capturing=false; if(inExit && this.isRectInLight(this.exit)){ const sp=Math.hypot(this.player.vx,this.player.vy); const f= sp<25?1:0.45; this.exit.progress+=RATE*f*dt; this.exit.capturing=true; if(this.exit.progress>=this.exit.required){ this.exit.progress=this.exit.required; try{Audio.playExitOpen();}catch(_){ } setTimeout(()=>{ this.setVictory(); try{Audio.playVictory();}catch(_){ } }, 900); } } else if(this.exit.progress>0) this.exit.progress=Math.max(0,this.exit.progress-0.15*dt); 
-        },
+            if(!this.exit) return;
+            const RATE = 0.18;
+            const inExit = this.rectContainsPoint(this.exit, this.player.x, this.player.y);
+            this.exit.capturing = false;
+
+            if(inExit && this.isRectInLight(this.exit)){
+                const sp = Math.hypot(this.player.vx, this.player.vy);
+                const f = sp < 25 ? 1 : 0.45;
+                this.exit.progress += RATE * f * dt;
+                this.exit.capturing = true;
+
+                if(this.exit.progress >= this.exit.required){
+                this.exit.progress = this.exit.required;
+                try { Audio.playExitOpen(); } catch(_) {}
+
+                setTimeout(() => {
+                    this.setVictory();
+                }, 900);
+                }
+            } else if(this.exit.progress>0) {
+                this.exit.progress = Math.max(0, this.exit.progress - 0.15*dt);
+            }
+            },
         updateHUD(remaining){
             const livesEl=$(UI_IDS.LIVES); if(livesEl) livesEl.textContent=this.player.lives; const keysEl=$(UI_IDS.KEYS); if(keysEl) keysEl.textContent=`${this.player.keys||0}/3`; const timeEl=$(UI_IDS.TIME); if(timeEl){ const m=Math.floor(remaining/60); const s=Math.floor(remaining%60); timeEl.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
         },
@@ -269,33 +337,44 @@ window.Game = {
         },
 
     // Luz (cono) - mejora de visibilidad general
-    drawFOV(ctx){ 
-        const pxW=this.player.x, pyW=this.player.y; 
-        const r=GAME_CONSTANTS.PLAYER.FOV_RADIUS, ang=GAME_CONSTANTS.PLAYER.FOV_ANGLE; 
-        const a0=this.player.aimAngle-ang/2; 
-        const a1=this.player.aimAngle+ang/2; 
-        ctx.save(); 
-        ctx.fillStyle='rgba(0,0,0,0.64)'; 
-        ctx.fillRect(0,0,this.canvas.width,this.canvas.height); 
-        ctx.globalCompositeOperation='destination-out'; 
-        const points=this.computeVisibilityCone(pxW,pyW,r,a0,a1); 
-        if(points.length) points.unshift({x:pxW,y:pyW}); 
-        if(points.length>=2){ 
-            const px=pxW-this.cameraX, py=pyW-this.cameraY; 
-            const grad=ctx.createRadialGradient(px,py,r*0.05,px,py,r); 
-            grad.addColorStop(0,'rgba(255,255,255,1)'); 
-            grad.addColorStop(0.3,'rgba(255,255,255,0.9)'); 
-            grad.addColorStop(0.7,'rgba(255,255,255,0.5)'); 
-            grad.addColorStop(1,'rgba(255,255,255,0)'); 
-            ctx.fillStyle=grad; 
-            ctx.beginPath(); 
-            ctx.moveTo(points[0].x - this.cameraX, points[0].y - this.cameraY); 
-            for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x - this.cameraX, points[i].y - this.cameraY); 
-            ctx.closePath(); 
-            ctx.fill(); 
-        } 
-        ctx.restore(); 
-    },
+    drawFOV(ctx) {
+        if (!this.player) return;
+
+        const px = this.player.x - this.cameraX;
+        const py = this.player.y - this.cameraY;
+        const radius = GAME_CONSTANTS.PLAYER.FOV_RADIUS;
+        const angle  = GAME_CONSTANTS.PLAYER.FOV_ANGLE;
+
+        // calcula los puntos del cono en coords de mundo
+        const points = this.computeVisibilityCone(this.player.x, this.player.y, radius, angle);
+
+        // Si por algún bug no hay puntos, NO dibujes la textura de oscuridad
+        if (!points || points.length < 2) return;
+
+        ctx.save();
+
+        // capa de oscuridad
+        ctx.fillStyle = 'rgba(0,0,0,0.64)';  // puedes ajustar este alpha si quieres menos "tapado"
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // recorte del cono
+        ctx.globalCompositeOperation = 'destination-out';
+        const g = ctx.createRadialGradient(px, py, radius * 0.15, px, py, radius);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+
+        ctx.beginPath();
+        ctx.moveTo(points[0].x - this.cameraX, points[0].y - this.cameraY);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x - this.cameraX, points[i].y - this.cameraY);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+        },
+
 
   // Punto iluminado
   isPointInLight(x,y){ 
@@ -303,7 +382,7 @@ window.Game = {
       const a=Math.atan2(y-this.player.y,x-this.player.x); 
       const da=Math.atan2(Math.sin(a-this.player.aimAngle),Math.cos(a-this.player.aimAngle)); 
       const dist=Math.hypot(x-this.player.x,y-this.player.y); 
-      if(Math.abs(da)>ang/2||dist>r) return false; 
+      if(Math.abs(da)>ang/2||dist>r) return false;
       return !this.rayHitsWall(this.player.x,this.player.y,x,y); 
   },
 

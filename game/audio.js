@@ -43,19 +43,28 @@ export const Audio = {
   },
   fadeOut(src,ms=600){ if(!src||!src._gainNode) return; const g=src._gainNode; const now=this.ctx.currentTime; g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(g.gain.value,now); g.gain.linearRampToValueAtTime(0,now+ms/1000); setTimeout(()=>{ try{src.stop();}catch(_){ } }, ms+50); },
   stop(names){ names.forEach(n=>{ if(this[n] && this[n].stop){ try{this[n].stop();}catch(_){ } } }); },
-  playMenuAmbient(){ 
-      this.ensureInit(); 
-      this.stopGameLoop(); 
-      this.stopSpecials(); 
-      if(this.begin){ 
-          this.fadeOut(this.begin,400); 
-      } 
-      setTimeout(()=>{ 
-          if(this.buffers.begin) {
-              this.begin=this.play('begin',{loop:true,volume:0.85,fadeIn:600,stopOthers:true}); 
-          }
-      }, 150); 
+  playMenuAmbient() {
+    this.ensureInit();
+    this.stopGameLoop();
+    this.stopSpecials();
+    if (this.begin) {
+      this.fadeOut(this.begin, 400);
+    }
+
+    // Esperar a que terminen de cargarse los audios
+    this.ready().then(() => {
+      if (!this.buffers.begin) return;
+      this.begin = this.play('begin', {
+        loop: true,
+        volume: 0.85,
+        fadeIn: 600,
+        stopOthers: true
+      });
+    }).catch(() => {
+      // opcional: manejo de error silencioso
+    });
   },
+
   playGameAmbient(){ this.ensureInit(); this.stopMenu(); this.stopSpecials(); this.stopGameLoop(); this.gameLoop=this.play('game',{loop:true,volume:0.32,fadeIn:900}); },
   stopGameLoop(){ if(this.gameLoop){ this.fadeOut(this.gameLoop,800); this.gameLoop=null; } },
   stopMenu(){ if(this.begin){ this.fadeOut(this.begin,600); this.begin=null; } },
