@@ -183,33 +183,6 @@ body {
 
 /* panel HUD duplicado arriba se mantiene posicionado por regla anterior */
 
-#command-panel {
-    display: none; /* eliminado */
-}
-
-#command-panel button {
-    padding: 10px 15px;
-    background: #2a4;
-    color: white;
-    border: 2px solid #4c6;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-family: 'Courier New', monospace;
-    transition: all 0.2s;
-}
-
-#command-panel button:hover:not(:disabled) {
-    background: #3b5;
-    border-color: #6e8;
-}
-
-#command-panel button:disabled {
-    background: #222;
-    color: #555;
-    border-color: #333;
-    cursor: not-allowed;
-}
-
 /* Botones en las pantallas del juego */
 button {
     padding: 12px 24px;

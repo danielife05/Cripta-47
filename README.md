@@ -1,50 +1,47 @@
 ## Cripta 47: El Amanecer de las Sombras
 
-Juego top–down arcade stealth/shooter en JavaScript sin dependencias externas.
+Manual rápido de juego.
 
 ### Objetivo
-Recoge 3 llaves en el laberinto oscuro, activa la salida y escapa antes de que se agote el tiempo, sobreviviendo a oleadas de enemigos que se aceleran con el paso de los minutos y cada llave capturada.
+Sobrevive en la cripta, recoge 3 llaves y escapa por la puerta de salida antes de que se agote el tiempo.
 
-### Mecánicas principales
-1. Luz cónica (FOV) del jugador: solo ilumina parte del escenario; enemigos fuera de la luz no pueden ser abatidos.
-2. Enemigos aceleran con el progreso del tiempo y las llaves obtenidas.
-3. Captura de llaves y salida es progresiva: permanecer quieto cerca acelera la captura.
-4. Daño cuerpo a cuerpo por contacto continuo (cada cierto intervalo).
-5. Audio dinámico (ambient zombie + proximidad amenaza).
+### Cómo jugar
+- **Iniciar partida:**
+	- Abre `index.html` en el navegador.
+	- En la pantalla de menú, haz clic en **INICIAR MISIÓN**.
 
-### Controles
-Movimiento: WASD / Flechas
-Apuntar: Mouse / Touch
-Disparo: Click / Tap
+- **Controles:**
+	- Movimiento: **W A S D** o **Flechas**.
+	- Apuntar: **Mouse** (o tocar en pantalla en dispositivos táctiles).
+	- Disparar: **Click Izquierdo** (o tap).
 
-### Estructura (src)
-```
-index.html      # Canvas y pantallas UI
-main.js         # Bucle principal (requestAnimationFrame) + bootstrap
-game/game.js    # Objeto Game: lógica principal (refactorizado, funciones claras)
-game/units.js   # Clases Player, Enemy, Bullet
-game/input.js   # Entrada teclado/mouse/touch
-game/audio.js   # Sistema de audio WebAudio (carga y reproducción eventos)
-game/level_data.js # Constantes y mapa base
-game/pathfinding.js # A* (actualmente no integrado en gameplay principal)
-engine/loader.js # Loader de imágenes (SVG, etc.)
-styles/style.css # Estilos UI
-assets/         # Imágenes y audio
-```
+- **Luz y visibilidad:**
+	- Tu personaje solo ilumina un **cono de luz** delante de él.
+	- Los enemigos solo pueden ser abatidos si están dentro de ese cono de luz.
 
-### Refactor 2025-11
-Se documentó `game/game.js` y se dividieron responsabilidades internas:
-* Escalada de dificultad -> `applyDifficultyEscalation()`
-* Spawning -> `handleEnemySpawning()` + `isValidEnemySpawn()`
-* Audio amenaza -> `updateThreatAudio()`
-* Contacto melee -> `resolveMeleeContact()`
-* Captura llaves -> `updateKeys()`
-* Captura salida -> `updateExit()`
-* HUD -> `updateHUD()`
-* Validaciones spawn repetidas centralizadas.
+- **Llaves:**
+	- Hay **3 llaves** repartidas por el laberinto.
+	- Para capturarlas debes permanecer cerca de ellas; una barra circular indica el progreso.
+	- Si te mueves demasiado o te alejas, el progreso se detiene o retrocede lentamente.
 
-Sin cambios en las mecánicas originales ni parámetros principales.
+- **Salida:**
+	- Cuando tengas las 3 llaves, aparecerá la **puerta de salida** en el mapa.
+	- Entra en la zona iluminada de la puerta y quédate dentro hasta completar la barra de escape.
+	- Si lo consigues antes de que el tiempo llegue a cero, ganas la partida.
 
+- **Enemigos:**
+	- Te persiguen continuamente.
+	- A medida que pasa el tiempo y consigues llaves, **se vuelven más rápidos y numerosos**.
+	- Si permanecen pegados a ti, te hacen daño de forma periódica.
 
-### Ejecución
-Abrir `index.html` en un servidor estático (recomendado) o directamente en el navegador moderno. Si el audio no suena inicialmente, realizar una interacción (click en el botón) para permitir contexto de Audio.
+- **Vidas y tiempo:**
+	- Tienes un número limitado de **vidas**.
+	- El **HUD** muestra vidas, llaves obtenidas y tiempo restante.
+	- Si tus vidas llegan a cero o se acaba el tiempo, aparece la pantalla de **GAME OVER**.
+
+### Audio
+- El juego tiene música de menú, música de partida y sonidos de ambiente de zombies.
+- Si el audio no suena al principio, haz clic en el botón del menú para que el navegador permita usar el audio.
+
+### Reiniciar
+- En la pantalla de **GAME OVER** o **VICTORIA**, haz clic en el botón para volver al menú y empezar una nueva partida.
