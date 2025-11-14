@@ -36,6 +36,12 @@ export const Audio = {
       openExit: 'assets/audio/openExit.mp3',
       win: 'assets/audio/win.mp3',
       lose: 'assets/audio/lose.mp3',
+      // efecto de disparo
+      shoot: 'assets/audio/shoot.mp3',
+      // efecto de daño al jugador
+      playerHit: 'assets/audio/playerHit.mp3',
+      // efecto de muerte de zombie (usa uno; puedes añadir más variantes luego)
+      zombieDie: 'assets/audio/zombieDie.mp3',
     };
 
     Object.entries(coreFiles).forEach(([name, url]) => this.loadAudio(name, url));
@@ -57,12 +63,14 @@ export const Audio = {
     return Promise.all(this.loadPromises);
   },
 
-  play(name, { loop = false, volume = 1, fadeIn = 0 } = {}) {
+  play(name, { loop = false, volume = 1, fadeIn = 0, rate = 1 } = {}) {
     if (!this.initialized || !this.buffers[name]) return null;
 
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers[name];
     src.loop = loop;
+    // permitir variar el pitch/velocidad
+    try { src.playbackRate.value = rate; } catch (_) {}
 
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
@@ -201,6 +209,41 @@ export const Audio = {
     this.nextZombieAmbient = 0;
     this.lastProximityPlay = 0;
     this.stopSpecials();
+  },
+
+  // Reproducir disparo con ligera aleatoriedad para evitar monotonía
+  playShoot() {
+    this.ensureInit();
+    if (!this.buffers.shoot) return;
+    const vol = 0.6 + Math.random() * 0.15;   // 0.60–0.75
+    const rate = 0.96 + Math.random() * 0.12; // 0.96–1.08
+    this.play('shoot', { volume: vol, rate });
+  },
+
+  // Sonido de daño al jugador
+  playPlayerHit() {
+    this.ensureInit();
+    if (this.buffers.playerHit) {
+      this.play('playerHit', { volume: 0.9 });
+      return;
+    }
+    // Fallback suave si falta el asset específico
+    const alt = this.pickLoaded(['apZombie1', 'apZombie2', 'apZombie3', 'keys']);
+    if (alt) this.play(alt, { volume: 0.5 });
+  },
+
+  // Sonido al morir un zombie
+  playZombieDeath() {
+    this.ensureInit();
+    if (this.buffers.zombieDie) {
+      // pequeña variación de pitch para variedad
+      const rate = 0.92 + Math.random() * 0.16; // 0.92–1.08
+      this.play('zombieDie', { volume: 0.85, rate });
+      return;
+    }
+    // Fallback si falta el asset específico
+    const alt = this.pickLoaded(['ambienceZombie1', 'ambienceZombie2', 'apZombie1']);
+    if (alt) this.play(alt, { volume: 0.45 });
   },
 
   ensureInit() {

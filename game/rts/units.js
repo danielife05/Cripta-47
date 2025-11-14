@@ -1,4 +1,5 @@
 import { GAME_CONSTANTS, COLORS } from './level_data.js';
+import { Audio } from './audio.js';
 
 /**
  * Clases de entidad: Player, Enemy, Bullet.
@@ -63,6 +64,7 @@ export class Player {
       const muzzleX = this.x + dirx * 14;
       const muzzleY = this.y + diry * 6;
       bullets.push(new Bullet(muzzleX, muzzleY, dirx, diry, speedB, GAME_CONSTANTS.PLAYER.BULLET_DAMAGE));
+      try { Audio.playShoot(); } catch (_) {}
     }
 
     if (this.invuln > 0) this.invuln -= dt;

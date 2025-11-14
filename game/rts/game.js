@@ -221,6 +221,7 @@ window.Game = {
                     e.kill();
                     this.score += 10;
                     this.addSplat(e.x, e.y);
+                    try { Audio.playZombieDeath && Audio.playZombieDeath(); } catch (_) {}
                 }
             }
         }
@@ -364,13 +365,26 @@ window.Game = {
     },
 
     updateHUD(remaining) {
-        const livesEl = document.getElementById('hud-lives');
-        const keysEl = document.getElementById('hud-keys');
+        // Hearts
+        const hearts = document.querySelectorAll('#hud .hearts .heart');
+        if (hearts && hearts.length) {
+            const lives = Math.max(0, Math.min(3, this.player.lives));
+            hearts.forEach((el, idx) => {
+                el.classList.toggle('active', idx < lives);
+            });
+        }
+
+        // Keys
+        const keys = document.querySelectorAll('#hud .keys .key');
+        if (keys && keys.length) {
+            const k = Math.max(0, Math.min(3, this.player.keys || 0));
+            keys.forEach((el, idx) => {
+                el.classList.toggle('active', idx < k);
+            });
+        }
+
+        // Time (right-top badge)
         const timeEl = document.getElementById('hud-time');
-
-        if (livesEl) livesEl.textContent = this.player.lives;
-        if (keysEl) keysEl.textContent = `${this.player.keys || 0}/3`;
-
         if (timeEl) {
             const m = Math.floor(remaining / 60);
             const s = Math.floor(remaining % 60);
@@ -793,8 +807,8 @@ window.Game = {
             return true;
         },
 
-  // Daño
-  damagePlayer(a){ this.player.lives-=a; if(this.player.lives<=0) this.setGameOver('Derrotado'); },
+    // Daño
+    damagePlayer(a){ try{ if(Audio && Audio.playPlayerHit) Audio.playPlayerHit(); }catch(_){ } this.player.lives-=a; if(this.player.lives<=0) this.setGameOver('Derrotado'); },
 
     // Game Over / Victoria (con audio de eventos)
     setGameOver(msg){ const t=document.querySelector('#gameover-screen h1'); const d=document.querySelector('#gameover-screen p'); if(t) t.textContent='GAME OVER'; if(d) d.textContent=msg||'Has caído.'; try{Audio.playDefeat();}catch(_){ } this.setState('GAMEOVER'); },

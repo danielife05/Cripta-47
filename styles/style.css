@@ -176,10 +176,26 @@ body {
 @keyframes noiseShift { 0%{ transform: translate3d(0,0,0);} 50%{ transform: translate3d(-5px,3px,0);} 100%{ transform: translate3d(0,0,0);} }
 
 /* HUD y Paneles */
-#hud {
-    pointer-events: all;
-    /* Hace el HUD interactivo */
+#hud{ position:fixed; inset:0; pointer-events:none; z-index:130; }
+.hud-left{ position:absolute; top:16px; left:16px; display:flex; flex-direction:column; gap:8px; }
+.hud-right{ position:absolute; top:16px; right:16px; }
+
+.hearts, .keys{ display:flex; gap:8px; }
+.heart, .key{ width:28px; height:28px; display:inline-block; opacity:0.35; filter: grayscale(40%); transition: opacity .2s ease, filter .2s ease, transform .15s ease; }
+.heart.active, .key.active{ opacity:1; filter:none; }
+.heart.active{ filter: drop-shadow(0 0 6px rgba(255,80,90,0.6)); }
+.key.active{ filter: drop-shadow(0 0 6px rgba(255,220,90,0.6)); }
+
+/* Heart via inline SVG data-URI */
+.heart{
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='%23ff6b6b'/><stop offset='100%' stop-color='%23b11226'/></linearGradient></defs><path d='M32 57s-9.6-8.2-16.2-14.8C9.7 36.1 6 31.6 6 26c0-6.1 4.7-11 10.5-11 4.5 0 7.6 2.4 9.5 5.6C28 17.4 31.1 15 35.6 15 41.3 15 46 19.9 46 26c0 5.6-3.7 10.1-9.8 16.2C41.6 48.8 32 57 32 57z' fill='url(%23g)' stroke='%23ffb3b3' stroke-width='1.2'/></svg>");
+    background-size: contain; background-repeat:no-repeat; background-position:center;
 }
+
+/* Keys use existing svg assets; use key1 for all for now */
+.key{ background-image:url('../assets/img/key1.svg'); background-size:contain; background-repeat:no-repeat; background-position:center; }
+
+.timer-badge{ pointer-events:none; background: rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.18); padding:8px 12px; border-radius:10px; color:#fff; font-weight:700; letter-spacing:1px; font-size:1.1rem; box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
 
 /* panel HUD duplicado arriba se mantiene posicionado por regla anterior */
 
@@ -222,6 +238,35 @@ button:hover {
     z-index:150;
     font-family:'Courier New', monospace;
 }
+#alert-layer,
+#hud-alert {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    pointer-events: none;
+    /* evita bloquear clics del juego */
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* permitir interacción dentro del anuncio si la hay */
+#alert-layer>*,
+#hud-alert>* {
+    pointer-events: auto;
+}
+
+/* opcional: estilo del banner si necesitas uno consistente */
+.alert-banner {
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 8px;
+    max-width: min(90vw, 640px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
 .game-alert {
     background: rgba(180,0,0,0.18);
     border:2px solid #ff4444;
@@ -239,17 +284,4 @@ button:hover {
 }
 
 /* Timer centrado arriba */
-#timer-overlay{
-    position: fixed;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 140;
-    pointer-events: none;
-}
-#timer-overlay #timer{
-    color: #ffffff;
-    font-size: 2rem;
-    font-weight: 700;
-    text-shadow: 0 0 10px rgba(255,255,255,0.35);
-}
+/* old centered timer overlay no longer used */

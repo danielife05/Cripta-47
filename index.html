@@ -43,13 +43,23 @@
         <div class="noise-layer"></div>
       </div>
 
-      <div id="hud" class="hidden">
-        <div id="hud-vitals">Vidas: <span id="hud-lives">3</span></div>
-        <div id="hud-objectives">Llaves: <span id="hud-keys">0</span></div>
-        <div id="hud-timer">Tiempo: <span id="hud-time">5:00</span></div>
-        <div id="hud-alert" class="hidden">
-          ¡ADVERTENCIA! ¡La horda se está volviendo más rápida!
+      <div id="hud" class="hidden" aria-live="polite" aria-atomic="true">
+        <div class="hud-left">
+          <div class="hearts" aria-label="Vidas">
+            <span class="heart" data-i="1"></span>
+            <span class="heart" data-i="2"></span>
+            <span class="heart" data-i="3"></span>
+          </div>
+          <div class="keys" aria-label="Llaves">
+            <span class="key" data-i="1"></span>
+            <span class="key" data-i="2"></span>
+            <span class="key" data-i="3"></span>
+          </div>
         </div>
+        <div class="hud-right">
+          <div id="hud-time" class="timer-badge">05:00</div>
+        </div>
+        <div id="hud-alert" class="hidden">¡ADVERTENCIA! ¡La horda se está volviendo más rápida!</div>
       </div>
 
       <div id="gameover-screen" class="game-screen hidden">
@@ -59,17 +69,7 @@
       </div>
     </div>
 
-    <div
-      id="alert-layer"
-      style="
-        position: fixed;
-        top: 20%;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1000;
-        pointer-events: none;
-      "
-    ></div>
+    <div id="alert-layer"></div>
 
     <script type="module" src="./main.js"></script>
   </body>
