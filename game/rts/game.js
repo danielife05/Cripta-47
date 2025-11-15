@@ -20,8 +20,11 @@ window.Game = {
   spawnTimer: 0,
   spawnInterval: GAME_CONSTANTS.WAVES.INITIAL_SPAWN_INTERVAL,
   gameTime: 0,
+    bonusTime: 0,
   enemyScale: 1,
   maxEnemies: 60,
+    inFinalAssault: false,
+    finalAssaultBurstDone: false,
     lastEscalationMinute: 0,
     lastAlerts: {}, alertCooldownMs: 2500,
   exitSpawned: false,
@@ -149,9 +152,13 @@ window.Game = {
         this.spawnTimer = 0;
         this.spawnInterval = GAME_CONSTANTS.WAVES.INITIAL_SPAWN_INTERVAL;
         this.gameTime = 0;
+        this.bonusTime = 0;
         this.enemyScale = 1;
         this.exitSpawned = false;
         this.exit = null;
+        this.bonusApplied = false;
+        this.inFinalAssault = false;
+        this.finalAssaultBurstDone = false;
         this.lastEscalationMinute = 0;
 
         // Mantenemos solo el laberinto procedural como base
@@ -163,6 +170,7 @@ window.Game = {
             this.player.y = start.y;
         }
 
+        // Llaves aleatorias; la salida aparecerá luego cuando se tengan las 3 llaves
         this.keys = this.spawnRandomKeys(3);
         this.ambientDecals = [];
         this.generateAmbientBloodDecals(80);
@@ -171,6 +179,9 @@ window.Game = {
 
         try { Audio.resetGame && Audio.resetGame(); } catch (_) {}
         this.setState('GAME');
+
+        // Mensaje inicial de objetivo
+        this.spawnDifficultyAlertOnce('Recolecta las 3 llaves para escapar.');
     },
 
     // Lógica frame
@@ -184,7 +195,7 @@ window.Game = {
         this.gameTime += dt;
         this.applyDifficultyEscalation();
 
-        const remaining = Math.max(0, GAME_CONSTANTS.MAX_GAME_TIME - this.gameTime);
+        const remaining = Math.max(0, GAME_CONSTANTS.MAX_GAME_TIME + this.bonusTime - this.gameTime);
         if (remaining <= 0) {
             this.setGameOver('Tiempo agotado');
             return;
@@ -256,7 +267,15 @@ window.Game = {
 
     handleEnemySpawning() {
         this.spawnTimer = 0;
-        let batch = Math.min(3, 1 + Math.floor(this.threatLevel / 3));
+        let batch;
+
+        // Si estamos en la fase final (abriendo la puerta), forzamos un spawn más agresivo
+        if (this.inFinalAssault) {
+            batch = 3;
+        } else {
+            batch = Math.min(3, 1 + Math.floor(this.threatLevel / 3));
+        }
+
         batch = Math.min(batch, Math.max(0, this.maxEnemies - this.enemies.length));
         for (let i = 0; i < batch; i++) this.spawnEnemy();
     },
@@ -332,29 +351,65 @@ window.Game = {
 
         this.keys = this.keys.filter(k => !k.collected);
 
-        if (!this.exitSpawned && this.player.keys >= 3) {
-            const ex = this.spawnRandomExit();
-            if (ex) {
-                this.exit = { ...ex, progress: 0, capturing: false, required: 1 };
+        // Cuando el jugador consiga las 3 llaves por primera vez:
+        // - Aparece la puerta en la posición inicial
+        // - Se añaden 3 minutos extra al contador
+        if (this.player.keys === 3 && !this.bonusApplied) {
+            this.bonusApplied = true;
+            this.bonusTime += 180; // +3 minutos
+
+            const start = this.getMazeStartPosition();
+            if (start) {
+                this.exit = {
+                    x: start.x - 32,
+                    y: start.y - 32,
+                    w: 64,
+                    h: 64,
+                    progress: 0,
+                    capturing: false,
+                    required: 1,
+                };
                 this.exitSpawned = true;
-                this.spawnDifficultyAlertOnce('¡SALIDA DISPONIBLE! Busca la puerta de escape.');
                 try { Audio.playDoorSpawn(); } catch (_) {}
             }
+
+            this.spawnDifficultyAlertOnce('Has obtenido todas las llaves. La puerta está en el inicio y se han añadido 3 minutos para escapar.');
         }
     },
 
     updateExit(dt) {
         if (!this.exit) return;
 
-        const RATE = 0.18;
+        // Similar al sistema de llaves: estar encima de la puerta
+        // hace que se cargue un círculo de progreso más lento.
+        const RATE = 0.11; // más lento que las llaves
         const inExit = this.rectContainsPoint(this.exit, this.player.x, this.player.y);
         this.exit.capturing = false;
 
-        if (inExit && this.isRectInLight(this.exit)) {
+        if (inExit) {
             const sp = Math.hypot(this.player.vx, this.player.vy);
             const f = sp < 25 ? 1 : 0.45;
             this.exit.progress += RATE * f * dt;
             this.exit.capturing = true;
+
+            // Activar fase final de asedio mientras se intenta abrir la puerta
+            if (!this.inFinalAssault) {
+                this.inFinalAssault = true;
+                this.spawnDifficultyAlertOnce('¡La horda se lanza sobre ti mientras abres la puerta!');
+            }
+
+            // Ajustar parámetros de spawn para que sea muy agresivo pero jugable
+            this.spawnInterval = 0.4; // intentos de spawn muy frecuentes
+            this.maxEnemies = 80;     // permitir más enemigos en escena
+
+            // Pequeño impulso extra de velocidad, con tope suave
+            this.enemyScale = Math.min(this.enemyScale * 1.1, 2.2);
+
+            // Burst inicial de zombies al empezar a abrir la puerta (solo una vez)
+            if (!this.finalAssaultBurstDone) {
+                this.finalAssaultBurstDone = true;
+                this.spawnBurst(10, 550, 900);
+            }
 
             if (this.exit.progress >= this.exit.required) {
                 this.exit.progress = this.exit.required;
@@ -362,8 +417,26 @@ window.Game = {
 
                 setTimeout(() => this.setVictory(), 900);
             }
-        } else if (this.exit.progress > 0) {
-            this.exit.progress = Math.max(0, this.exit.progress - 0.15 * dt);
+        } else {
+            if (this.exit.progress > 0) {
+                this.exit.progress = Math.max(0, this.exit.progress - 0.10 * dt);
+            }
+
+            // Si el jugador se retira de la puerta, relajamos poco a poco el asedio final
+            if (this.inFinalAssault) {
+                // Lerp suave del spawnInterval hacia el mínimo normal (0.75)
+                const targetInterval = 0.75;
+                this.spawnInterval += (targetInterval - this.spawnInterval) * Math.min(1, dt * 2.5);
+
+                // Reducir el límite de enemigos hacia el valor base
+                const targetMax = 60;
+                this.maxEnemies += (targetMax - this.maxEnemies) * Math.min(1, dt * 3);
+
+                // Si se aleja lo suficiente y el progreso casi se pierde, podemos salir de la fase final
+                if (this.exit.progress <= 0.01) {
+                    this.inFinalAssault = false;
+                }
+            }
         }
     },
 
@@ -583,16 +656,37 @@ window.Game = {
     },
 
     drawExitAndKeys(ctx) {
-        if (this.exit && this.isRectInLight(this.exit)) {
+        if (this.exit) {
             const sx = this.exit.x - this.cameraX;
             const sy = this.exit.y - this.cameraY;
             const img = this.assets.exit;
 
+            // Dibujar puerta siempre que exista (ya no depende de la luz)
             if (img && img.complete) {
                 ctx.drawImage(img, sx, sy, this.exit.w, this.exit.h);
             } else {
                 ctx.fillStyle = COLORS.EXIT;
                 ctx.fillRect(sx, sy, this.exit.w, this.exit.h);
+            }
+
+            // Círculo de progreso alrededor de la puerta, similar a las llaves
+            if (this.exit.progress > 0) {
+                const cx = sx + this.exit.w / 2;
+                const cy = sy + this.exit.h / 2;
+                const prog = Math.min(1, this.exit.progress / this.exit.required);
+
+                ctx.strokeStyle = '#4ade80'; // verde para "escape"
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 32, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+                ctx.stroke();
+
+                if (this.exit.capturing) {
+                    ctx.fillStyle = 'rgba(74,222,128,0.18)';
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 36, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
