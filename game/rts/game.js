@@ -161,7 +161,7 @@ window.Game = {
         this.finalAssaultBurstDone = false;
         this.lastEscalationMinute = 0;
 
-        // Mantenemos solo el laberinto procedural como base
+        // Laberinto procedural original
         this.walls = this.generateMazeWallsSeeded('SEMILLA');
 
         const start = this.getMazeStartPosition();
@@ -183,6 +183,7 @@ window.Game = {
         // Mensaje inicial de objetivo
         this.spawnDifficultyAlertOnce('Recolecta las 3 llaves para escapar.');
     },
+
 
     // Lógica frame
     update(dt) {
@@ -248,18 +249,21 @@ window.Game = {
 
         // Helpers de Update
     applyDifficultyEscalation() {
-            // No escalar ni mostrar alertas si la partida ya no está en curso
-            if (this.currentState !== 'GAME') return;
+        // No escalar ni mostrar alertas si la partida ya no está en curso
+        if (this.currentState !== 'GAME') return;
 
-        const elapsedMin = Math.floor(this.gameTime / 60);
-        if (elapsedMin === this.lastEscalationMinute) return;
+        // Escalada cada 90 segundos (1:30)
+        const elapsedSteps = Math.floor(this.gameTime / 90);
+        if (elapsedSteps === this.lastEscalationMinute) return;
 
-        this.lastEscalationMinute = elapsedMin;
-        this.threatLevel = elapsedMin + 1;
-        this.spawnInterval = Math.max(1.2, this.spawnInterval * 0.95);
-        this.enemyScale = Math.min(1.8, this.enemyScale * 1.06);
+        this.lastEscalationMinute = elapsedSteps;
+        this.threatLevel = elapsedSteps + 1;
 
-        if (elapsedMin > 0) {
+        // Escalada más suave para que no igualen tan rápido al jugador
+        this.spawnInterval = Math.max(1.4, this.spawnInterval * 0.96);
+        this.enemyScale = Math.min(1.6, this.enemyScale * 1.05);
+
+        if (elapsedSteps > 0) {
             this.spawnDifficultyAlertOnce('¡ADVERTENCIA! ¡La horda se está volviendo más rápida!');
             this.spawnBurst(3, 700, 1100);
         }
@@ -269,11 +273,12 @@ window.Game = {
         this.spawnTimer = 0;
         let batch;
 
-        // Si estamos en la fase final (abriendo la puerta), forzamos un spawn más agresivo
+        // Si estamos en la fase final (abriendo la puerta), spawn algo más suave
         if (this.inFinalAssault) {
-            batch = 3;
+            batch = 2;
         } else {
-            batch = Math.min(3, 1 + Math.floor(this.threatLevel / 3));
+            // Ligera agresividad: pequeños grupos pero algo más frecuentes
+            batch = Math.min(3, 1 + Math.floor(this.threatLevel / 4));
         }
 
         batch = Math.min(batch, Math.max(0, this.maxEnemies - this.enemies.length));
@@ -298,16 +303,32 @@ window.Game = {
 
     resolveMeleeContact(dt) {
         let touching = false;
+        const PUSH_STRENGTH = 60;
+
         for (const e of this.enemies) {
             if (e.state !== 'alive') continue;
-            if (Math.hypot(e.x - this.player.x, e.y - this.player.y) < e.r + 10) {
+
+            const dx = this.player.x - e.x;
+            const dy = this.player.y - e.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = e.r + 14; // radio zombie + margen del soldier
+
+            if (dist < minDist && dist > 0.001) {
                 touching = true;
-                break;
+
+                // Separar físicamente al zombie del jugador para que no se superpongan
+                const overlap = minDist - dist;
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                // Empujar al zombie ligeramente hacia fuera
+                e.x -= nx * overlap * 0.6;
+                e.y -= ny * overlap * 0.6;
             }
         }
 
         this.contactTimer = touching ? (this.contactTimer || 0) + dt : 0;
-        const HIT_PERIOD = 0.7;
+        const HIT_PERIOD = 0.85; // un poco más lento para compensar la colisión dura
         while (this.contactTimer >= HIT_PERIOD) {
             this.contactTimer -= HIT_PERIOD;
             this.damagePlayer(1);
@@ -338,10 +359,17 @@ window.Game = {
                     this.player.keys = (this.player.keys || 0) + 1;
                     try { Audio.playKeyPickup(); } catch (_) {}
 
-                    this.spawnInterval = Math.max(0.75, this.spawnInterval * 0.85);
-                    this.enemyScale = Math.min(2.0, this.enemyScale * 1.08);
+                    // Ajuste suave de dificultad por llave
+                    this.spawnInterval = Math.max(1.0, this.spawnInterval * 0.9);
+                    this.enemyScale = Math.min(1.7, this.enemyScale * 1.06);
 
-                    this.spawnDifficultyAlertOnce('Llave capturada');
+                    // Mensajes distintos para cada llave
+                    if (this.player.keys === 1) {
+                        this.spawnDifficultyAlertOnce('Primera llave asegurada. La salida estará en el punto de partida.');
+                    } else if (this.player.keys === 2) {
+                        this.spawnDifficultyAlertOnce('Llave obtenida. Solo falta una más.');
+                    }
+
                     this.spawnBurst(Math.min(4, 2 + this.player.keys), 650, 1000);
                 }
             } else if (k.progress > 0) {
@@ -352,11 +380,11 @@ window.Game = {
         this.keys = this.keys.filter(k => !k.collected);
 
         // Cuando el jugador consiga las 3 llaves por primera vez:
-        // - Aparece la puerta en la posición inicial
+        // - Aparece la puerta en la posición de partida
         // - Se añaden 3 minutos extra al contador
         if (this.player.keys === 3 && !this.bonusApplied) {
             this.bonusApplied = true;
-            this.bonusTime += 180; // +3 minutos
+            this.bonusTime += 60; // +1 minuto
 
             const start = this.getMazeStartPosition();
             if (start) {
@@ -372,8 +400,8 @@ window.Game = {
                 this.exitSpawned = true;
                 try { Audio.playDoorSpawn(); } catch (_) {}
             }
-
-            this.spawnDifficultyAlertOnce('Has obtenido todas las llaves. La puerta está en el inicio y se han añadido 3 minutos para escapar.');
+            // Mensaje específico de tercera llave (sin repetir "llave obtenida")
+            this.spawnDifficultyAlertOnce('Todas las llaves conseguidas. La puerta te espera en el punto de partida. Tienes 3 minutos extra para escapar.');
         }
     },
 
@@ -398,17 +426,17 @@ window.Game = {
                 this.spawnDifficultyAlertOnce('¡La horda se lanza sobre ti mientras abres la puerta!');
             }
 
-            // Ajustar parámetros de spawn para que sea muy agresivo pero jugable
-            this.spawnInterval = 0.4; // intentos de spawn muy frecuentes
-            this.maxEnemies = 80;     // permitir más enemigos en escena
+            // Ajustar parámetros de spawn para que sea intenso pero no imposible
+            this.spawnInterval = 0.6; // un poco menos frenético
+            this.maxEnemies = 65;     // límite menor de enemigos
 
-            // Pequeño impulso extra de velocidad, con tope suave
-            this.enemyScale = Math.min(this.enemyScale * 1.1, 2.2);
+            // Impulso moderado de velocidad, con tope más bajo
+            this.enemyScale = Math.min(this.enemyScale * 1.05, 1.9);
 
             // Burst inicial de zombies al empezar a abrir la puerta (solo una vez)
             if (!this.finalAssaultBurstDone) {
                 this.finalAssaultBurstDone = true;
-                this.spawnBurst(10, 550, 900);
+                this.spawnBurst(6, 650, 950);
             }
 
             if (this.exit.progress >= this.exit.required) {
@@ -697,16 +725,6 @@ window.Game = {
             const sy = k.y - this.cameraY;
             const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.3;
 
-            if (k.collected) {
-                if (inLight) {
-                    const keyImg = this.assets['key' + (idx + 1)];
-                    if (keyImg && keyImg.complete) {
-                        ctx.drawImage(keyImg, sx - 16, sy - 16, 32, 32);
-                    }
-                }
-                continue;
-            }
-
             if (inLight) {
                 ctx.save();
                 ctx.globalAlpha = pulse * 0.5;
@@ -716,7 +734,7 @@ window.Game = {
                 ctx.fill();
                 ctx.restore();
 
-                const keyImg = this.assets['key' + (idx + 1)];
+                const keyImg = this.assets['key' + ((idx % 3) + 1)];
                 if (keyImg && keyImg.complete) {
                     ctx.drawImage(keyImg, sx - 16, sy - 16, 32, 32);
                 } else {
@@ -933,15 +951,21 @@ window.Game = {
       const div=document.createElement('div'); 
       div.className='game-alert'; 
       div.textContent=msg; 
-      div.style.cssText='background:rgba(180,0,0,0.9);color:#fff;padding:15px 30px;margin:10px 0;border-radius:5px;font-size:18px;font-weight:bold;text-align:center;box-shadow:0 0 20px rgba(255,0,0,0.5);animation:fadeInOut 2.5s ease-in-out;';
+      // Estilos más ligeros y sin sombras pesadas para evitar reflujo costoso
+      div.style.cssText='background:rgba(180,0,0,0.85);color:#fff;padding:10px 20px;margin:6px 0;border-radius:4px;font-size:16px;font-weight:bold;text-align:center;';
       layer.appendChild(div); 
-      setTimeout(()=>div.remove(),2500); 
+      // Usamos un tiempo de vida ligeramente menor para reducir tiempo en pantalla
+      setTimeout(()=>div.remove(),1800); 
   },
   spawnDifficultyAlertOnce(msg){ const now=performance.now?performance.now():Date.now(); const last=this.lastAlerts[msg]||0; if(now-last < this.alertCooldownMs) return; this.lastAlerts[msg]=now; this.spawnDifficultyAlert(msg); },
 
-  // Laberinto
-  getWalls(){ return this.walls && this.walls.length ? this.walls : MAP.walls; },
-  getMazeStartPosition(){ const cell=64, margin=40; return {x: margin+cell*1+cell/2, y: margin+cell*1+cell/2}; },
+    // Laberinto
+    getWalls(){ return this.walls && this.walls.length ? this.walls : MAP.walls; },
+    getMazeStartPosition(){
+        // Punto de partida cerca de la esquina superior izquierda del laberinto procedural
+        const cell=64, margin=40;
+        return {x: margin+cell*1+cell/2, y: margin+cell*1+cell/2};
+    },
     generateMazeWallsSeeded(seed){
         const margin=40, cell=64;
         const cols=Math.floor((GAME_CONSTANTS.WORLD_WIDTH - margin*2)/cell);
@@ -953,25 +977,54 @@ window.Game = {
         const rand=this.seededRandomFactory(this.seedStringToInt(seed));
         const stack=[];
         let cx=1, cy=1; grid[cy][cx]=0; stack.push([cx,cy]);
-            const baseDirs=[[2,0],[-2,0],[0,2],[0,-2]];
-            while(stack.length){
-                const top=stack[stack.length-1];
-                const x=top[0], y=top[1];
-                // trabajar con una copia local para evitar corrupción accidental
-                const dirs=baseDirs.slice();
-                // shuffle dirs (Fisher–Yates)
-                for(let i=dirs.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); const tmp=dirs[i]; dirs[i]=dirs[j]; dirs[j]=tmp; }
-                let carved=false;
-                for(let k=0;k<dirs.length;k++){
-                    const d=dirs[k];
-                    if(!d || d.length<2) continue;
-                    const dx=d[0]|0, dy=d[1]|0;
-                    const nx=x+dx, ny=y+dy;
-                    if(inBounds(nx,ny) && grid[ny][nx]===1){
-                        grid[y+dy/2][x+dx/2]=0; grid[ny][nx]=0; stack.push([nx,ny]); carved=true; break;
-                    }
+        const baseDirs=[[2,0],[-2,0],[0,2],[0,-2]];
+
+        // Fase 1: laberinto base tipo "árbol" (un solo camino entre celdas)
+        while(stack.length){
+            const top=stack[stack.length-1];
+            const x=top[0], y=top[1];
+            const dirs=baseDirs.slice();
+            // shuffle dirs (Fisher–Yates)
+            for(let i=dirs.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); const tmp=dirs[i]; dirs[i]=dirs[j]; dirs[j]=tmp; }
+            let carved=false;
+            for(let k=0;k<dirs.length;k++){
+                const d=dirs[k];
+                if(!d || d.length<2) continue;
+                const dx=d[0]|0, dy=d[1]|0;
+                const nx=x+dx, ny=y+dy;
+                if(inBounds(nx,ny) && grid[ny][nx]===1){
+                    grid[y+dy/2][x+dx/2]=0; grid[ny][nx]=0; stack.push([nx,ny]); carved=true; break;
                 }
+            }
             if(!carved) stack.pop();
+        }
+
+        // Fase 2: abrir "atajos" para crear más caminos que crucen el mapa
+        // Recorremos algunas paredes internas y, con baja probabilidad,
+        // las quitamos si conectan dos celdas abiertas diferentes.
+        for(let y=2;y<H-2;y++){
+            for(let x=2;x<W-2;x++){
+                if(grid[y][x]!==1) continue;
+
+                // Solo considerar paredes que separan corredores horizontales o verticales
+                const upOpen    = grid[y-1][x]===0;
+                const downOpen  = grid[y+1][x]===0;
+                const leftOpen  = grid[y][x-1]===0;
+                const rightOpen = grid[y][x+1]===0;
+
+                let canCarve=false;
+                // Pared vertical entre dos celdas horizontales
+                if(leftOpen && rightOpen && !upOpen && !downOpen) canCarve=true;
+                // Pared horizontal entre dos celdas verticales
+                if(upOpen && downOpen && !leftOpen && !rightOpen) canCarve=true;
+
+                if(!canCarve) continue;
+
+                // Probabilidad moderada de abrir, para no romper demasiado el laberinto
+                if(rand()<0.18){
+                    grid[y][x]=0;
+                }
+            }
         }
         const walls=[];
         walls.push({x:0,y:0,w:GAME_CONSTANTS.WORLD_WIDTH,h:margin});

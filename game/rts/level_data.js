@@ -7,7 +7,7 @@ export const GAME_CONSTANTS = {
   WORLD_WIDTH: 3200,
   WORLD_HEIGHT: 2400,
   // Tiempo límite de partida
-  MAX_GAME_TIME: 360, // 6 minutos (360 segundos)
+  MAX_GAME_TIME: 420, // 7 minutos (420 segundos)
   DIFFICULTY_INCREASE_TIME: 120, // 2 minutos (120 segundos)
   
   PLAYER: {
