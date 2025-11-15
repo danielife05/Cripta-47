@@ -237,6 +237,9 @@ window.Game = {
 
         // Helpers de Update
     applyDifficultyEscalation() {
+            // No escalar ni mostrar alertas si la partida ya no está en curso
+            if (this.currentState !== 'GAME') return;
+
         const elapsedMin = Math.floor(this.gameTime / 60);
         if (elapsedMin === this.lastEscalationMinute) return;
 
