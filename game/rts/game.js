@@ -285,7 +285,7 @@ window.Game = {
         }
 
         this.contactTimer = touching ? (this.contactTimer || 0) + dt : 0;
-        const HIT_PERIOD = 0.4;
+        const HIT_PERIOD = 0.7;
         while (this.contactTimer >= HIT_PERIOD) {
             this.contactTimer -= HIT_PERIOD;
             this.damagePlayer(1);
@@ -719,7 +719,9 @@ window.Game = {
             const sy = this.player.y - this.cameraY;
             ctx.save();
             ctx.translate(sx, sy);
-            const rot = this.player.aimAngle + (this.spriteOffsets?.soldier || 0);
+            // ajuste de rotación para el nuevo sprite (mira hacia arriba)
+            const spriteRotationFix = -Math.PI / 2;
+            const rot = this.player.aimAngle + (this.spriteOffsets?.soldier || 0) + spriteRotationFix;
             ctx.rotate(rot);
 
             if (typeof ctx.filter === 'string') {
@@ -727,7 +729,20 @@ window.Game = {
             }
 
             ctx.globalCompositeOperation = 'source-over';
-            ctx.drawImage(pImg, -24, -24, 48, 48);
+
+            // Escalar el sprite nuevo manteniendo tamaño razonable en pantalla
+            // Aumentado para que el soldier se vea más grande
+            const targetSize = 72; // tamaño aproximado deseado en px
+            const maxDim = Math.max(pImg.naturalWidth, pImg.naturalHeight) || 1;
+            const scale = targetSize / maxDim;
+            const drawW = pImg.naturalWidth * scale;
+            const drawH = pImg.naturalHeight * scale;
+
+            // pequeños offsets por si el gráfico no está perfectamente centrado
+            const offsetX = 0;
+            const offsetY = 0;
+
+            ctx.drawImage(pImg, -drawW / 2 + offsetX, -drawH / 2 + offsetY, drawW, drawH);
 
             if (!('filter' in ctx)) {
                 ctx.globalCompositeOperation = 'lighter';
