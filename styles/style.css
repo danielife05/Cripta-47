@@ -157,10 +157,6 @@ body {
 .start-btn:hover .btn-text{ transform: translateY(-1px) scale(1.02); filter: saturate(1.15); box-shadow: 0 16px 42px rgba(200,40,40,0.50), inset 0 1px 0 rgba(255,240,240,0.55); }
 .start-btn:active .btn-text{ transform: translateY(0); }
 
-.controls{ display:flex; gap:16px; opacity:0.9; margin-top: 8px; flex-wrap:wrap; justify-content:center; }
-.controls span{ color:#9ab; margin-right:6px; }
-.controls strong{ color:#ffdede; background:#290506; border:1px solid #521217; padding:4px 8px; border-radius:6px; box-shadow: inset 0 0 12px rgba(255,110,110,0.25); }
-
 .secondary-btn{
     margin-top: 16px;
     padding: 10px 22px;
@@ -294,14 +290,6 @@ button:hover {
     transform: scale(1.05);
 }
 
-/* Para la selección de unidades */
-.selection-box {
-    border: 1px dashed lime;
-    background-color: rgba(0, 255, 0, 0.1);
-    position: absolute;
-    pointer-events: none;
-}
-
 /* Alert overlay */
 #alert-layer {
     position: fixed;
@@ -408,15 +396,6 @@ button:hover {
     justify-content:center;
 }
 
-/* opcional: estilo del banner si necesitas uno consistente */
-.alert-banner {
-    background: rgba(0, 0, 0, 0.75);
-    color: #fff;
-    padding: 10px 16px;
-    border-radius: 8px;
-    max-width: min(90vw, 640px);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-}
 .game-alert {
     background: rgba(180,0,0,0.18);
     border:2px solid #ff4444;
@@ -424,8 +403,8 @@ button:hover {
     padding:14px 22px;
     font-size:1.3rem;
     text-shadow:0 0 6px #ff4444;
-    /* 5s totales: ~3.5s visible + 1.5s de fade */
-    animation: alertFade 3.5s ease-out forwards;
+    /* Duración alineada con la vida del anuncio en JS (6000 ms) */
+    animation: alertFade 4.2s ease-out forwards;
 }
 @keyframes alertFade {
     0%   { transform:translateY(-20px); opacity:0; }
@@ -434,5 +413,4 @@ button:hover {
     100% { opacity:0; }
 }
 
-/* Timer centrado arriba */
-/* old centered timer overlay no longer used */
+/* Timer centrado arriba: ahora gestionado por #hud-time en el HUD */

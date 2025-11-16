@@ -1,5 +1,5 @@
 import { Input } from './input.js';
-import { GAME_CONSTANTS, LEVELS, COLORS, MAP } from './level_data.js';
+import { GAME_CONSTANTS, COLORS } from './level_data.js';
 import { Player, Enemy } from './units.js';
 import { Audio } from './audio.js';
 
@@ -44,7 +44,6 @@ window.Game = {
         this.canvas.width  = GAME_CONSTANTS.CANVAS_WIDTH;
         this.canvas.height = GAME_CONSTANTS.CANVAS_HEIGHT;
     Input.init(this.canvas, this.ctx);
-    this.level = LEVELS[0];
 
         // Cargar mejor puntaje previo desde localStorage
         try {
@@ -1117,8 +1116,8 @@ window.Game = {
       // Estilos más ligeros y sin sombras pesadas para evitar reflujo costoso
       div.style.cssText='background:rgba(180,0,0,0.85);color:#fff;padding:10px 20px;margin:6px 0;border-radius:4px;font-size:16px;font-weight:bold;text-align:center;';
       layer.appendChild(div); 
-      // Tiempo de vida del anuncio: 3 segundos
-      setTimeout(()=>div.remove(),3000); 
+      // Tiempo de vida del anuncio: 6000 ms (6 segundos)
+      setTimeout(()=>div.remove(),6000); 
   },
   spawnDifficultyAlertOnce(msg){ const now=performance.now?performance.now():Date.now(); const last=this.lastAlerts[msg]||0; if(now-last < this.alertCooldownMs) return; this.lastAlerts[msg]=now; this.spawnDifficultyAlert(msg); },
 
@@ -1210,7 +1209,6 @@ window.Game = {
   rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
   randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){ for(let i=0;i<200;i++){ const x=minX+Math.random()*(maxX-minX); const y=minY+Math.random()*(maxY-minY); if(this.pointInsideAnyWall(x,y)) continue; return {x,y}; } return null; },
   spawnRandomKeys(n){ const arr=[]; const MIN_PLAYER=600, MIN_BETWEEN=700; while(arr.length<n){ const p=this.randomClearPoint(); if(!p) break; if(Math.hypot(p.x-this.player.x,p.y-this.player.y) < MIN_PLAYER) continue; let ok=true; for(const k of arr){ if(Math.hypot(p.x-k.x,p.y-k.y) < MIN_BETWEEN){ ok=false; break; } } if(!ok) continue; arr.push({x:p.x,y:p.y,collected:false,progress:0,capturing:false}); } return arr; },
-  spawnRandomExit(){ const W=100,H=80; for(let i=0;i<200;i++){ const p=this.randomClearPoint(); if(!p) break; const rect={x:p.x-W/2,y:p.y-H/2,w:W,h:H}; if(this.rectOverlapsAnyWall(rect)) continue; if(Math.hypot(rect.x+rect.w/2-this.player.x, rect.y+rect.h/2-this.player.y) < 1000) continue; return rect; } return null; },
 
   // Manchas sangre
   addSplat(x,y){ const splat={x,y,r:16+Math.random()*18,blobs:6+Math.floor(Math.random()*4),rot:Math.random()*Math.PI*2,seed:Math.random()*2,color:COLORS.ENEMY,born:performance.now?performance.now():Date.now(),life:900}; this.splats.push(splat); const now=performance.now?performance.now():Date.now(); this.splats=this.splats.filter(s=> now - s.born < s.life); if(this.splats.length>120) this.splats.shift(); },
