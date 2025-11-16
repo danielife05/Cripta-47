@@ -15,7 +15,8 @@ window.Game = {
   player: null,
   enemies: [], bullets: [], splats: [],
   keys: [], exit: null,
-  score: 0,
+    score: 0,
+    highScore: 0,
   threatLevel: 1,
   spawnTimer: 0,
   spawnInterval: GAME_CONSTANTS.WAVES.INITIAL_SPAWN_INTERVAL,
@@ -25,6 +26,11 @@ window.Game = {
   maxEnemies: 60,
     inFinalAssault: false,
     finalAssaultBurstDone: false,
+        // Medición de FPS
+        showFPS: true,
+        fps: 0,
+        _fpsAccum: 0,
+        _fpsFrames: 0,
     lastEscalationMinute: 0,
     lastAlerts: {}, alertCooldownMs: 2500,
   exitSpawned: false,
@@ -39,6 +45,14 @@ window.Game = {
         this.canvas.height = GAME_CONSTANTS.CANVAS_HEIGHT;
     Input.init(this.canvas, this.ctx);
     this.level = LEVELS[0];
+
+        // Cargar mejor puntaje previo desde localStorage
+        try {
+            const stored = localStorage.getItem('cripta47_highscore');
+            this.highScore = stored ? parseInt(stored, 10) || 0 : 0;
+        } catch (_) {
+            this.highScore = 0;
+        }
 
         this.loadAssets(() => {
             this.createProceduralPatterns();
@@ -87,7 +101,32 @@ window.Game = {
         };
 
         bind('start-button', () => this.startGame());
+        bind('start-from-instructions-button', () => this.startGame());
+        bind('instructions-button', () => this.setState('INSTRUCTIONS'));
+        bind('back-to-menu-button', () => this.setState('MENU'));
         bind('restart-button', () => { location.reload(); });
+        bind('resume-button', () => this.setState('GAME'));
+        bind('pause-to-menu-button', () => { location.reload(); });
+
+        // Tecla Esc para pausar/reanudar
+        if (!this._pauseKeyBound) {
+            this._pauseKeyBound = true;
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                    if (this.currentState === 'GAME') {
+                        this.setState('PAUSE');
+                    } else if (this.currentState === 'PAUSE') {
+                        this.setState('GAME');
+                    }
+                    return;
+                }
+
+                // Tecla R para mutear/desmutear todo el sonido
+                if (e.key === 'r' || e.key === 'R') {
+                    try { Audio.toggleMute && Audio.toggleMute(); } catch (_) {}
+                }
+            });
+        }
     },
 
   // Cambio estado
@@ -95,12 +134,14 @@ window.Game = {
         this.currentState = st;
 
         const menu = document.getElementById('menu-screen');
+        const instructions = document.getElementById('instructions-screen');
         const hud = document.getElementById('hud');
         const over = document.getElementById('gameover-screen');
+        const pause = document.getElementById('pause-screen');
         const container = document.getElementById('game-container');
         const canvas = this.canvas;
 
-        [menu, hud, over].forEach(el => {
+        [menu, instructions, hud, over, pause].forEach(el => {
             if (!el) return;
             el.classList.add('hidden');
             el.classList.remove('visible');
@@ -111,6 +152,15 @@ window.Game = {
                 if (menu) {
                     menu.classList.remove('hidden');
                     menu.classList.add('visible');
+                }
+                if (canvas) canvas.style.pointerEvents = 'none';
+                if (container) container.style.pointerEvents = 'auto';
+                break;
+
+            case 'INSTRUCTIONS':
+                if (instructions) {
+                    instructions.classList.remove('hidden');
+                    instructions.classList.add('visible');
                 }
                 if (canvas) canvas.style.pointerEvents = 'none';
                 if (container) container.style.pointerEvents = 'auto';
@@ -137,6 +187,14 @@ window.Game = {
                 if (st === 'GAMEOVER') {
                     try { Audio.stopGameLoop(); Audio.playDefeat(); } catch (_) {}
                 }
+                break;
+
+            case 'PAUSE':
+                if (pause) {
+                    pause.classList.remove('hidden');
+                }
+                if (canvas) canvas.style.pointerEvents = 'none';
+                if (container) container.style.pointerEvents = 'auto';
                 break;
         }
     },
@@ -189,6 +247,15 @@ window.Game = {
     update(dt) {
         if (this.currentState !== 'GAME' || !this.player) return;
 
+        // Medición sencilla de FPS (promedio cada 1 segundo)
+        this._fpsAccum += dt;
+        this._fpsFrames++;
+        if (this._fpsAccum >= 1) {
+            this.fps = this._fpsFrames;
+            this._fpsAccum = 0;
+            this._fpsFrames = 0;
+        }
+
         if (!this.walls || !this.walls.length) {
             this.walls = this.generateMazeWallsSeeded('SEMILLA');
         }
@@ -209,11 +276,40 @@ window.Game = {
         this.resolveEntityVsWalls(this.player, 12);
         this.updateCamera();
 
+        // Actualizar enemigos (movimiento + colisión con paredes)
         this.enemies.forEach(e => {
             const lit = this.isPointInLight(e.x, e.y);
             e.update(dt, this.player, lit, this.enemyScale);
             this.resolveEntityVsWalls(e, e.r);
         });
+
+        // Separación simple entre zombies para que no se superpongan visualmente
+        for (let i = 0; i < this.enemies.length; i++) {
+            const a = this.enemies[i];
+            if (a.state !== 'alive') continue;
+            for (let j = i + 1; j < this.enemies.length; j++) {
+                const b = this.enemies[j];
+                if (b.state !== 'alive') continue;
+
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.hypot(dx, dy);
+                const minDist = (a.r || 18) + (b.r || 18) - 4; // ligero solapamiento permitido
+
+                if (dist > 0.001 && dist < minDist) {
+                    const overlap = minDist - dist;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+
+                    // Empujar a cada zombi la mitad de la superposición en direcciones opuestas
+                    const push = overlap * 0.5;
+                    a.x -= nx * push;
+                    a.y -= ny * push;
+                    b.x += nx * push;
+                    b.y += ny * push;
+                }
+            }
+        }
 
         this.bullets.forEach(b => b.update(dt));
         for (const b of this.bullets) {
@@ -231,7 +327,7 @@ window.Game = {
                 b.life = 0;
                 if (e.hp <= 0) {
                     e.kill();
-                    this.score += 10;
+                    this.score += 10; // Puntuación por zombie eliminado
                     this.addSplat(e.x, e.y);
                     try { Audio.playZombieDeath && Audio.playZombieDeath(); } catch (_) {}
                 }
@@ -357,6 +453,8 @@ window.Game = {
                     k.collected = true;
 
                     this.player.keys = (this.player.keys || 0) + 1;
+                    // Puntuación por llave recogida
+                    this.score += 50;
                     try { Audio.playKeyPickup(); } catch (_) {}
 
                     // Ajuste suave de dificultad por llave
@@ -494,6 +592,12 @@ window.Game = {
             const s = Math.floor(remaining % 60);
             timeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         }
+
+        // Score (HUD right)
+        const scoreEl = document.getElementById('hud-score');
+        if (scoreEl) {
+            scoreEl.textContent = `PUNTOS: ${this.score}`;
+        }
     },
 
   // Cámara
@@ -530,6 +634,17 @@ window.Game = {
     this.postLightEnhance(ctx);
     this.drawPlayer(ctx);
     this.drawBulletsOnTop(ctx);
+
+    // Mostrar contador de FPS opcional
+    if (this.showFPS) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.font = '14px monospace';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`FPS: ${this.fps}`, 8, 8);
+        ctx.restore();
+    }
   },
 
     // Luz (cono) - mejora de visibilidad general
@@ -940,9 +1055,57 @@ window.Game = {
     // Daño
     damagePlayer(a){ try{ if(Audio && Audio.playPlayerHit) Audio.playPlayerHit(); }catch(_){ } this.player.lives-=a; if(this.player.lives<=0) this.setGameOver('Derrotado'); },
 
-    // Game Over / Victoria (con audio de eventos)
-    setGameOver(msg){ const t=document.querySelector('#gameover-screen h1'); const d=document.querySelector('#gameover-screen p'); if(t) t.textContent='GAME OVER'; if(d) d.textContent=msg||'Has caído.'; try{Audio.playDefeat();}catch(_){ } this.setState('GAMEOVER'); },
-    setVictory(){ const t=document.querySelector('#gameover-screen h1'); const d=document.querySelector('#gameover-screen p'); if(t) t.textContent='VICTORIA'; if(d) d.textContent='Escapaste.'; try{Audio.playVictory();}catch(_){ } this.setState('VICTORY'); },
+    // Game Over / Victoria (con cálculo de score final y high score)
+    _finalizeScoreAndHighScore(isVictory){
+        try {
+            const msgEl = document.getElementById('gameover-message');
+            const titleEl = document.querySelector('#gameover-screen h1');
+            const summaryEl = document.getElementById('gameover-score-summary');
+
+            // Si es victoria: sumar puntos por tiempo restante
+            if (isVictory) {
+                const remaining = Math.max(0, GAME_CONSTANTS.MAX_GAME_TIME + this.bonusTime - this.gameTime);
+                const bonus = Math.floor(remaining) * 5; // 5 puntos por segundo restante
+                this.score += bonus;
+            }
+
+            // Actualizar high score persistente
+            let prev = this.highScore || 0;
+            if (this.score > prev) {
+                prev = this.score;
+                this.highScore = this.score;
+                try { localStorage.setItem('cripta47_highscore', String(this.highScore)); } catch (_) {}
+            }
+
+            // Construir mensaje de resumen (separado del mensaje principal)
+            const summary = `Puntuación: ${this.score}  |  Mejor puntuación: ${prev}`;
+            if (summaryEl) summaryEl.textContent = summary;
+
+            // Asegurar título coherente
+            if (titleEl && isVictory) titleEl.textContent = 'VICTORIA';
+            if (titleEl && !isVictory) titleEl.textContent = 'GAME OVER';
+        } catch (_) {}
+    },
+
+    setGameOver(msg){
+        const t=document.querySelector('#gameover-screen h1');
+        const d=document.querySelector('#gameover-screen p');
+        if(t) t.textContent='GAME OVER';
+        if(d) d.textContent=msg||'Has caído.';
+        try{Audio.playDefeat();}catch(_){ }
+        this._finalizeScoreAndHighScore(false);
+        this.setState('GAMEOVER');
+    },
+
+    setVictory(){
+        const t=document.querySelector('#gameover-screen h1');
+        const d=document.querySelector('#gameover-screen p');
+        if(t) t.textContent='VICTORIA';
+        if(d) d.textContent='Escapaste.';
+        try{Audio.playVictory();}catch(_){ }
+        this._finalizeScoreAndHighScore(true);
+        this.setState('VICTORY');
+    },
 
   // Alertas
   spawnDifficultyAlert(msg){ 
@@ -954,8 +1117,8 @@ window.Game = {
       // Estilos más ligeros y sin sombras pesadas para evitar reflujo costoso
       div.style.cssText='background:rgba(180,0,0,0.85);color:#fff;padding:10px 20px;margin:6px 0;border-radius:4px;font-size:16px;font-weight:bold;text-align:center;';
       layer.appendChild(div); 
-      // Usamos un tiempo de vida ligeramente menor para reducir tiempo en pantalla
-      setTimeout(()=>div.remove(),1800); 
+      // Tiempo de vida del anuncio: 3 segundos
+      setTimeout(()=>div.remove(),3000); 
   },
   spawnDifficultyAlertOnce(msg){ const now=performance.now?performance.now():Date.now(); const last=this.lastAlerts[msg]||0; if(now-last < this.alertCooldownMs) return; this.lastAlerts[msg]=now; this.spawnDifficultyAlert(msg); },
 

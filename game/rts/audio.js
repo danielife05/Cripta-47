@@ -7,6 +7,7 @@ export const Audio = {
   ctx: null,
   master: null,
   initialized: false,
+  muted: false,
   buffers: {},
   gameLoop: null,
   zombieAmbientTimer: 0,
@@ -98,6 +99,17 @@ export const Audio = {
     gain.gain.setValueAtTime(gain.gain.value, now);
     gain.gain.linearRampToValueAtTime(0, now + ms / 1000);
     setTimeout(() => { try { src.stop(); } catch (_) {} }, ms + 50);
+  },
+
+  toggleMute() {
+    if (!this.initialized || !this.master) return;
+    this.muted = !this.muted;
+    // Mutear todo el audio bajando la ganancia del master
+    this.master.gain.value = this.muted ? 0 : 1;
+    try {
+      const el = document.getElementById('hud-mute');
+      if (el) el.classList.toggle('hidden', !this.muted);
+    } catch (_) {}
   },
 
   playMenuAmbient() {
