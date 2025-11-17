@@ -1,5 +1,11 @@
 /**
- * Módulo de entrada: teclado, mouse y touch con coordenadas de mundo.
+ * Módulo de entrada del juego.
+ *
+ * Responsabilidades:
+ * - Escuchar teclado (WASD, etc.) y exponer un set de teclas presionadas.
+ * - Convertir eventos de mouse y touch en una posición común relativa al canvas.
+ * - Ofrecer un helper para transformar esa posición a coordenadas de mundo
+ *   mediante el offset de cámara.
  */
 export const Input = {
   canvas: null,
@@ -7,6 +13,12 @@ export const Input = {
   keys: new Set(),
   mouse: { x: 0, y: 0, down: false },
 
+  /**
+   * Inicializa el sistema de entrada con el canvas principal.
+   * Registra listeners globales de teclado y listeners de mouse/touch en el canvas.
+   * @param {HTMLCanvasElement} canvas
+   * @param {CanvasRenderingContext2D} ctx
+   */
   init(canvas, ctx) {
     this.canvas = canvas;
     this.ctx = ctx;
@@ -43,7 +55,13 @@ export const Input = {
 
     canvas.addEventListener('touchend', () => { this.mouse.down = false; });
   },
-  // Convierte coordenadas del mouse en coordenadas de mundo con el offset de cámara
+  /**
+   * Convierte las coordenadas actuales del puntero (relativas al canvas)
+   * en coordenadas de mundo aplicando el offset de cámara.
+   * @param {number} offsetX desplazamiento de cámara en X.
+   * @param {number} offsetY desplazamiento de cámara en Y.
+   * @returns {{x:number,y:number}}
+   */
   getMouseWorld(offsetX, offsetY) {
     return { x: this.mouse.x + offsetX, y: this.mouse.y + offsetY };
   }

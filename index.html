@@ -6,6 +6,9 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
+    <meta name="description"
+      content="Cripta 47: shooter top-down en una cripta oscura. Recolecta las 3 llaves, sobrevive a la horda y escapa antes de que el tiempo se agote."
+    />
     <title>Cripta 47: El Amanecer de las Sombras</title>
     <link rel="stylesheet" href="./styles/style.css" />
   </head>
@@ -28,11 +31,9 @@
             <span class="btn-bg"></span>
             <span class="btn-text">INICIAR MISIÓN</span>
           </button>
-          <div class="controls">
-            <div><span>Movimiento</span><strong>W A S D</strong></div>
-            <div><span>Apunta</span><strong>Mouse</strong></div>
-            <div><span>Dispara</span><strong>Clic Izquierdo</strong></div>
-          </div>
+          <button id="instructions-button" class="secondary-btn">
+            INSTRUCCIONES
+          </button>
         </div>
         <div class="ambient-lights">
           <div class="al orb1"></div>
@@ -56,16 +57,82 @@
             <span class="key" data-i="3"></span>
           </div>
         </div>
-        <div class="hud-right">
+        <div class="hud-center">
           <div id="hud-time" class="timer-badge">05:00</div>
         </div>
-        <div id="hud-alert" class="hidden">¡ADVERTENCIA! ¡La horda se está volviendo más rápida!</div>
+        <div class="hud-right">
+          <div id="hud-score" class="timer-badge">PUNTOS: 0</div>
+        </div>
+        <div class="hud-bottom-left">
+          <div id="hud-mute" class="mute-indicator hidden" aria-label="Sonido silenciado">🔇</div>
+        </div>
+        <div id="hud-alert" class="hidden" role="status">¡ADVERTENCIA! ¡La horda se está volviendo más rápida!</div>
+      </div>
+
+      <!-- Pantalla de instrucciones -->
+      <div id="instructions-screen" class="game-screen hidden">
+        <div class="instructions-inner">
+          <h1>INSTRUCCIONES</h1>
+          <p class="instr-section-title">Objetivo</p>
+          <p>
+            Explora la cripta, <strong>recolecta las 3 llaves</strong> dispersas por el laberinto
+            y luego regresa al <strong>punto de partida</strong> para abrir la puerta de escape.
+            Al conseguir las 3 llaves obtendrás tiempo extra para lograrlo antes de que el
+            contador llegue a cero.
+          </p>
+
+          <p class="instr-section-title">Controles</p>
+          <ul class="instr-list">
+            <li><strong>W A S D</strong> &mdash; mover al soldado.</li>
+            <li><strong>Mouse</strong> &mdash; apuntar la linterna y el arma.</li>
+            <li><strong>Clic izquierdo</strong> &mdash; disparar.</li>
+            <li><strong>Esc</strong> &mdash; pausar/continuar la partida.</li>
+            <li><strong>R</strong> &mdash; silenciar / activar el sonido.</li>
+          </ul>
+
+          <p class="instr-section-title">Luz, enemigos y HUD</p>
+          <p>
+            Los zombies son más rápidos en la <strong>oscuridad</strong> y más lentos cuando
+            están dentro del <strong>cono de luz</strong>. Solo puedes dañarlos con balas si están iluminados.
+          </p>
+          <p>
+            Arriba a la izquierda verás tus <strong>vidas</strong> y <strong>llaves</strong>, en el centro el <strong>tiempo</strong>
+            restante y arriba a la derecha tu <strong>puntuación</strong>. Si el sonido está silenciado, se mostrará
+            un icono de altavoz tachado en la esquina inferior izquierda.
+          </p>
+
+          <div class="instr-buttons">
+            <button id="back-to-menu-button" class="secondary-btn">VOLVER AL MENÚ</button>
+            <button id="start-from-instructions-button" class="start-btn small">EMPEZAR PARTIDA</button>
+          </div>
+        </div>
+        <div class="scanlines"></div>
+        <div class="noise-layer"></div>
       </div>
 
       <div id="gameover-screen" class="game-screen hidden">
-        <h1>GAME OVER</h1>
-        <p id="gameover-message">Has sido eliminado.</p>
-        <button id="restart-button">MENÚ PRINCIPAL</button>
+        <div class="gameover-inner">
+          <h1>GAME OVER</h1>
+          <p id="gameover-message">Has sido eliminado.</p>
+          <div id="gameover-score-summary"></div>
+          <div class="gameover-buttons">
+            <button id="restart-button" class="secondary-btn">MENÚ PRINCIPAL</button>
+          </div>
+        </div>
+        <div class="scanlines"></div>
+        <div class="noise-layer"></div>
+      </div>
+
+      <!-- Pantalla de pausa -->
+      <div id="pause-screen" class="overlay-screen hidden">
+        <div class="pause-inner">
+          <h1>PAUSA</h1>
+          <p>El tiempo se ha detenido. Respira hondo y continúa la misión.</p>
+          <div class="pause-buttons">
+            <button id="resume-button" class="start-btn small">CONTINUAR</button>
+            <button id="pause-to-menu-button" class="secondary-btn">VOLVER AL MENÚ</button>
+          </div>
+        </div>
       </div>
     </div>
 

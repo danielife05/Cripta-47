@@ -1,13 +1,26 @@
 import { Input } from './input.js';
-import { GAME_CONSTANTS, LEVELS, COLORS, MAP } from './level_data.js';
+import { GAME_CONSTANTS, COLORS } from './level_data.js';
 import { Player, Enemy } from './units.js';
 import { Audio } from './audio.js';
+
+/**
+ * Núcleo del juego Cripta‑47.
+ *
+ * Este módulo monta el objeto global `window.Game` que concentra:
+ * - Estado de la partida (player, zombies, llaves, puerta, puntuación, dificultad).
+ * - Bucle de actualización de lógica (`update`) y dibujado (`render`).
+ * - Gestión de laberinto procedural, colisiones, luz y cámara.
+ * - Integración con audio, HUD/DOM y pantallas de menú, instrucciones, pausa y game over.
+ *
+ * La lógica está pensada para ser llamada desde `main.js`, que controla el
+ * `requestAnimationFrame` y delega en `Game.update(dt)` y `Game.render(ctx)`.
+ */
 
 // Utilidades pequeñas
 const $ = (id) => document.getElementById(id);
 const nowMs = () => (performance.now ? performance.now() : Date.now());
 
-// Objeto principal del juego (estado + lógica + render)
+/** Objeto principal del juego (estado, lógica y renderizado). */
 window.Game = {
   canvas: null, ctx: null,
   cameraX: 0, cameraY: 0,
@@ -15,7 +28,8 @@ window.Game = {
   player: null,
   enemies: [], bullets: [], splats: [],
   keys: [], exit: null,
-  score: 0,
+    score: 0,
+    highScore: 0,
   threatLevel: 1,
   spawnTimer: 0,
   spawnInterval: GAME_CONSTANTS.WAVES.INITIAL_SPAWN_INTERVAL,
@@ -25,20 +39,37 @@ window.Game = {
   maxEnemies: 60,
     inFinalAssault: false,
     finalAssaultBurstDone: false,
+        // Medición de FPS
+        showFPS: true,
+        fps: 0,
+        _fpsAccum: 0,
+        _fpsFrames: 0,
     lastEscalationMinute: 0,
     lastAlerts: {}, alertCooldownMs: 2500,
   exitSpawned: false,
     assets: {},
     spriteOffsets: { soldier: Math.PI, zombie: 0 },
 
-  // Inicialización
+    /**
+     * Inicializa el juego: canvas, input, high score, assets y UI.
+     * Deja el juego en estado `MENU` y arranca el ambiente de audio del menú.
+     *
+     * @param {string} [id='game'] id del elemento `<canvas>` principal.
+     */
   init(id='game') {
         this.canvas = document.getElementById(id);
         this.ctx = this.canvas.getContext('2d');
         this.canvas.width  = GAME_CONSTANTS.CANVAS_WIDTH;
         this.canvas.height = GAME_CONSTANTS.CANVAS_HEIGHT;
     Input.init(this.canvas, this.ctx);
-    this.level = LEVELS[0];
+
+        // Cargar mejor puntaje previo desde localStorage
+        try {
+            const stored = localStorage.getItem('cripta47_highscore');
+            this.highScore = stored ? parseInt(stored, 10) || 0 : 0;
+        } catch (_) {
+            this.highScore = 0;
+        }
 
         this.loadAssets(() => {
             this.createProceduralPatterns();
@@ -50,6 +81,11 @@ window.Game = {
         });
     },
 
+    /**
+     * Carga los sprites base (soldado, zombie, puerta y llaves).
+     * Cuando todas las imágenes terminan (éxito o error) invoca `done`.
+     * @param {() => void} done callback al finalizar la carga.
+     */
     loadAssets(done) {
         const manifest = {
             soldier: 'assets/img/soldier.svg',
@@ -72,7 +108,11 @@ window.Game = {
         });
     },
 
-    // Botones UI
+    /**
+     * Vincula todos los botones de la UI (menú, instrucciones, pausa, etc.)
+     * con las acciones correspondientes del objeto `Game`.
+     * También configura las teclas globales `Esc` (pausa) y `R` (mute).
+     */
     initUIManager() {
         const bind = (id, fn) => {
             const el = $(id);
@@ -87,20 +127,52 @@ window.Game = {
         };
 
         bind('start-button', () => this.startGame());
+        bind('start-from-instructions-button', () => this.startGame());
+        bind('instructions-button', () => this.setState('INSTRUCTIONS'));
+        bind('back-to-menu-button', () => this.setState('MENU'));
         bind('restart-button', () => { location.reload(); });
+        bind('resume-button', () => this.setState('GAME'));
+        bind('pause-to-menu-button', () => { location.reload(); });
+
+        // Tecla Esc para pausar/reanudar
+        if (!this._pauseKeyBound) {
+            this._pauseKeyBound = true;
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                    if (this.currentState === 'GAME') {
+                        this.setState('PAUSE');
+                    } else if (this.currentState === 'PAUSE') {
+                        this.setState('GAME');
+                    }
+                    return;
+                }
+
+                // Tecla R para mutear/desmutear todo el sonido
+                if (e.key === 'r' || e.key === 'R') {
+                    try { Audio.toggleMute && Audio.toggleMute(); } catch (_) {}
+                }
+            });
+        }
     },
 
-  // Cambio estado
+    /**
+     * Cambia el estado global del juego y actualiza pantallas/inputs.
+     * Estados posibles: `MENU`, `INSTRUCTIONS`, `GAME`, `PAUSE`,
+     * `GAMEOVER`, `VICTORY`.
+     * @param {('MENU'|'INSTRUCTIONS'|'GAME'|'PAUSE'|'GAMEOVER'|'VICTORY')} st
+     */
     setState(st) {
         this.currentState = st;
 
         const menu = document.getElementById('menu-screen');
+        const instructions = document.getElementById('instructions-screen');
         const hud = document.getElementById('hud');
         const over = document.getElementById('gameover-screen');
+        const pause = document.getElementById('pause-screen');
         const container = document.getElementById('game-container');
         const canvas = this.canvas;
 
-        [menu, hud, over].forEach(el => {
+        [menu, instructions, hud, over, pause].forEach(el => {
             if (!el) return;
             el.classList.add('hidden');
             el.classList.remove('visible');
@@ -111,6 +183,15 @@ window.Game = {
                 if (menu) {
                     menu.classList.remove('hidden');
                     menu.classList.add('visible');
+                }
+                if (canvas) canvas.style.pointerEvents = 'none';
+                if (container) container.style.pointerEvents = 'auto';
+                break;
+
+            case 'INSTRUCTIONS':
+                if (instructions) {
+                    instructions.classList.remove('hidden');
+                    instructions.classList.add('visible');
                 }
                 if (canvas) canvas.style.pointerEvents = 'none';
                 if (container) container.style.pointerEvents = 'auto';
@@ -138,10 +219,22 @@ window.Game = {
                     try { Audio.stopGameLoop(); Audio.playDefeat(); } catch (_) {}
                 }
                 break;
+
+            case 'PAUSE':
+                if (pause) {
+                    pause.classList.remove('hidden');
+                }
+                if (canvas) canvas.style.pointerEvents = 'none';
+                if (container) container.style.pointerEvents = 'auto';
+                break;
         }
     },
 
-    // Nueva partida
+    /**
+     * Comienza una nueva partida: resetea jugador, hordas, llaves, laberinto,
+     * dificultad, puntuación y audio. Coloca al jugador en el inicio del
+     * laberinto y muestra un mensaje de objetivo inicial.
+     */
     startGame() {
         this.player = new Player(120, 120);
         this.enemies = [];
@@ -184,10 +277,24 @@ window.Game = {
         this.spawnDifficultyAlertOnce('Recolecta las 3 llaves para escapar.');
     },
 
-
-    // Lógica frame
+    /**
+     * Lógica de actualización por frame durante el estado `GAME`.
+     * Avanza el tiempo, escala dificultad, genera hordas, mueve entidades,
+     * resuelve colisiones, aplica daño, gestiona llaves/puerta y HUD.
+     *
+     * @param {number} dt tiempo transcurrido en segundos desde el frame anterior.
+     */
     update(dt) {
         if (this.currentState !== 'GAME' || !this.player) return;
+
+        // Medición sencilla de FPS (promedio cada 1 segundo)
+        this._fpsAccum += dt;
+        this._fpsFrames++;
+        if (this._fpsAccum >= 1) {
+            this.fps = this._fpsFrames;
+            this._fpsAccum = 0;
+            this._fpsFrames = 0;
+        }
 
         if (!this.walls || !this.walls.length) {
             this.walls = this.generateMazeWallsSeeded('SEMILLA');
@@ -209,11 +316,40 @@ window.Game = {
         this.resolveEntityVsWalls(this.player, 12);
         this.updateCamera();
 
+        // Actualizar enemigos (movimiento + colisión con paredes)
         this.enemies.forEach(e => {
             const lit = this.isPointInLight(e.x, e.y);
             e.update(dt, this.player, lit, this.enemyScale);
             this.resolveEntityVsWalls(e, e.r);
         });
+
+        // Separación simple entre zombies para que no se superpongan visualmente
+        for (let i = 0; i < this.enemies.length; i++) {
+            const a = this.enemies[i];
+            if (a.state !== 'alive') continue;
+            for (let j = i + 1; j < this.enemies.length; j++) {
+                const b = this.enemies[j];
+                if (b.state !== 'alive') continue;
+
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.hypot(dx, dy);
+                const minDist = (a.r || 18) + (b.r || 18) - 4; // ligero solapamiento permitido
+
+                if (dist > 0.001 && dist < minDist) {
+                    const overlap = minDist - dist;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+
+                    // Empujar a cada zombi la mitad de la superposición en direcciones opuestas
+                    const push = overlap * 0.5;
+                    a.x -= nx * push;
+                    a.y -= ny * push;
+                    b.x += nx * push;
+                    b.y += ny * push;
+                }
+            }
+        }
 
         this.bullets.forEach(b => b.update(dt));
         for (const b of this.bullets) {
@@ -231,7 +367,7 @@ window.Game = {
                 b.life = 0;
                 if (e.hp <= 0) {
                     e.kill();
-                    this.score += 10;
+                    this.score += 10; // Puntuación por zombie eliminado
                     this.addSplat(e.x, e.y);
                     try { Audio.playZombieDeath && Audio.playZombieDeath(); } catch (_) {}
                 }
@@ -246,8 +382,11 @@ window.Game = {
         this.updateExit(dt);
         this.updateHUD(remaining);
     },
-
         // Helpers de Update
+    /**
+     * Escalada progresiva de dificultad en función del tiempo de partida.
+     * Ajusta `spawnInterval`, `enemyScale` y dispara alertas/brotes extra.
+     */
     applyDifficultyEscalation() {
         // No escalar ni mostrar alertas si la partida ya no está en curso
         if (this.currentState !== 'GAME') return;
@@ -269,6 +408,7 @@ window.Game = {
         }
     },
 
+    /** Genera un pequeño lote de zombis según el nivel de amenaza actual. */
     handleEnemySpawning() {
         this.spawnTimer = 0;
         let batch;
@@ -285,6 +425,11 @@ window.Game = {
         for (let i = 0; i < batch; i++) this.spawnEnemy();
     },
 
+    /**
+     * Actualiza el audio ambiental de amenaza en función de la distancia
+     * al zombi más cercano.
+     * @param {number} dt delta de tiempo en segundos.
+     */
     updateThreatAudio(dt) {
         try {
             let nearest = Infinity;
@@ -301,6 +446,12 @@ window.Game = {
         } catch (_) {}
     },
 
+    /**
+     * Gestiona el contacto cuerpo a cuerpo entre el jugador y los zombis.
+     * Empuja físicamente a los enemigos y aplica daño periódico mientras
+     * haya colisión.
+     * @param {number} dt delta de tiempo en segundos.
+     */
     resolveMeleeContact(dt) {
         let touching = false;
         const PUSH_STRENGTH = 60;
@@ -335,6 +486,11 @@ window.Game = {
             if (this.currentState !== 'GAME') break;
         }
     },
+    /**
+     * Gestiona la captura de llaves: progreso de captura, puntuación,
+     * ajuste fino de dificultad y aparición de la puerta al conseguir 3.
+     * @param {number} dt delta de tiempo en segundos.
+     */
     updateKeys(dt) {
         const KEY_R = 26;
         const CAP_RATE = 0.9;
@@ -357,6 +513,8 @@ window.Game = {
                     k.collected = true;
 
                     this.player.keys = (this.player.keys || 0) + 1;
+                    // Puntuación por llave recogida
+                    this.score += 50;
                     try { Audio.playKeyPickup(); } catch (_) {}
 
                     // Ajuste suave de dificultad por llave
@@ -381,7 +539,7 @@ window.Game = {
 
         // Cuando el jugador consiga las 3 llaves por primera vez:
         // - Aparece la puerta en la posición de partida
-        // - Se añaden 3 minutos extra al contador
+        // - Se añade 1 minuto extra al contador
         if (this.player.keys === 3 && !this.bonusApplied) {
             this.bonusApplied = true;
             this.bonusTime += 60; // +1 minuto
@@ -401,10 +559,15 @@ window.Game = {
                 try { Audio.playDoorSpawn(); } catch (_) {}
             }
             // Mensaje específico de tercera llave (sin repetir "llave obtenida")
-            this.spawnDifficultyAlertOnce('Todas las llaves conseguidas. La puerta te espera en el punto de partida. Tienes 3 minutos extra para escapar.');
+            this.spawnDifficultyAlertOnce('Todas las llaves conseguidas. La puerta te espera en el punto de partida. Tienes 1 minuto extra para escapar.');
         }
     },
 
+    /**
+     * Gestiona la interacción con la puerta de salida, incluyendo la
+     * "fase de asedio final" mientras se intenta abrir.
+     * @param {number} dt delta de tiempo en segundos.
+     */
     updateExit(dt) {
         if (!this.exit) return;
 
@@ -468,6 +631,10 @@ window.Game = {
         }
     },
 
+    /**
+     * Actualiza el HUD de vidas, llaves, tiempo restante y puntuación.
+     * @param {number} remaining tiempo restante en segundos.
+     */
     updateHUD(remaining) {
         // Hearts
         const hearts = document.querySelectorAll('#hud .hearts .heart');
@@ -494,9 +661,15 @@ window.Game = {
             const s = Math.floor(remaining % 60);
             timeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         }
+
+        // Score (HUD right)
+        const scoreEl = document.getElementById('hud-score');
+        if (scoreEl) {
+            scoreEl.textContent = `PUNTOS: ${this.score}`;
+        }
     },
 
-  // Cámara
+    /** Centra la cámara en el jugador respetando los límites del mundo. */
   updateCamera() {
     if (!this.player || !this.canvas) return;
 
@@ -509,7 +682,11 @@ window.Game = {
     this.cameraY = Math.max(0, Math.min(maxY, this.player.y - halfH));
   },
 
-  // Render (mismo orden de dibujo, menos bloque monolítico)
+    /**
+     * Dibuja un frame completo del estado actual del juego.
+     * Solo hace trabajo cuando `currentState === 'GAME'`.
+     * @param {CanvasRenderingContext2D} ctx contexto 2D del canvas principal.
+     */
   render(ctx) {
     if (this.currentState !== 'GAME' || !ctx) return;
 
@@ -530,9 +707,89 @@ window.Game = {
     this.postLightEnhance(ctx);
     this.drawPlayer(ctx);
     this.drawBulletsOnTop(ctx);
+
+    // Minimapa simple (solo para pruebas: jugador, llaves y puerta)
+    // this.drawDebugMiniMap(ctx);
+
+    // Mostrar contador de FPS opcional
+    if (this.showFPS) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.font = '14px monospace';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`FPS: ${this.fps}`, 8, 8);
+        ctx.restore();
+    }
   },
 
+    /**
+     * Minimapa muy simple para depuración: muestra la posición del jugador,
+     * las llaves sin recoger y la puerta (si existe) sobre una miniatura
+     * del mundo completo en la esquina superior derecha.
+     */
+    drawDebugMiniMap(ctx) {
+        if (!this.canvas || !this.player) return;
+
+        const worldW = GAME_CONSTANTS.WORLD_WIDTH;
+        const worldH = GAME_CONSTANTS.WORLD_HEIGHT;
+        const mapW = 180;
+        const mapH = 120;
+        const padding = 10;
+        const x0 = this.canvas.width - mapW - padding;
+        const y0 = padding;
+
+        ctx.save();
+
+        // Fondo del minimapa
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(x0, y0, mapW, mapH);
+
+        // Borde
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0 + 0.5, y0 + 0.5, mapW - 1, mapH - 1);
+
+        const scaleX = mapW / worldW;
+        const scaleY = mapH / worldH;
+
+        // Jugador
+        const px = x0 + this.player.x * scaleX;
+        const py = y0 + this.player.y * scaleY;
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Llaves sin recoger
+        ctx.fillStyle = '#facc15';
+        for (const k of this.keys) {
+            if (k.collected) continue;
+            const kx = x0 + k.x * scaleX;
+            const ky = y0 + k.y * scaleY;
+            ctx.fillRect(kx - 2, ky - 2, 4, 4);
+        }
+
+        // Puerta de salida
+        if (this.exit) {
+            const ex = x0 + (this.exit.x + this.exit.w / 2) * scaleX;
+            const ey = y0 + (this.exit.y + this.exit.h / 2) * scaleY;
+            ctx.fillStyle = '#60a5fa';
+            ctx.beginPath();
+            ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    },
     // Luz (cono) - mejora de visibilidad general
+    /**
+     * Dibuja el cono de luz del jugador y oscurece el resto de la escena
+     * mediante una máscara radial.
+     * @param {CanvasRenderingContext2D} ctx
+     */
     drawFOV(ctx) {
         if (!this.player) return;
 
@@ -572,7 +829,10 @@ window.Game = {
     },
 
 
-  // Punto iluminado
+    /**
+     * Indica si un punto del mundo está dentro del cono de luz del jugador
+     * y sin paredes bloqueando la línea de visión.
+     */
   isPointInLight(x,y){ 
       const r=GAME_CONSTANTS.PLAYER.FOV_RADIUS, ang=GAME_CONSTANTS.PLAYER.FOV_ANGLE; 
       const a=Math.atan2(y-this.player.y,x-this.player.x); 
@@ -582,7 +842,7 @@ window.Game = {
       return !this.rayHitsWall(this.player.x,this.player.y,x,y); 
   },
 
-  // Factor luz
+    /** Devuelve un factor de luz [0,1] para atenuar/brillar sprites. */
   lightFactorAt(x,y){ 
       if(!this.isPointInLight(x,y)) return 0; 
       const r=GAME_CONSTANTS.PLAYER.FOV_RADIUS; 
@@ -590,7 +850,7 @@ window.Game = {
       return Math.max(0,Math.min(1,Math.pow(f,0.6))); 
   },
 
-  // Origen linterna
+    /** Punto aproximado de origen de linterna/munición en coordenadas de mundo. */
         getMuzzlePoint(){
             const offFront=24; 
             const offSide=12;
@@ -602,7 +862,10 @@ window.Game = {
             };
         },
 
-  // Brillos secundarios
+    /**
+     * Añade un bloom cálido dentro del cono de luz para reforzar el contraste
+     * entre zonas iluminadas y oscuras.
+     */
     postLightEnhance(ctx) {
         // Refuerzo cálido dentro del cono (bloom ligero)
         const r = GAME_CONSTANTS.PLAYER.FOV_RADIUS;
@@ -634,6 +897,7 @@ window.Game = {
         ctx.restore();
     },
 
+    /** Dibuja una cuadrícula tenue sobre el suelo para dar estructura. */
     drawGrid(ctx) {
         ctx.strokeStyle = '#211014';
         ctx.lineWidth = 1;
@@ -662,6 +926,7 @@ window.Game = {
         ctx.globalAlpha = 1;
     },
 
+    /** Dibuja las paredes del laberinto usando patrones procedurales si existen. */
     drawWalls(ctx) {
         for (const w of this.getWalls()) {
             const sx = w.x - this.cameraX;
@@ -683,6 +948,7 @@ window.Game = {
         }
     },
 
+    /** Dibuja la puerta de salida y las llaves con sus indicadores de progreso. */
     drawExitAndKeys(ctx) {
         if (this.exit) {
             const sx = this.exit.x - this.cameraX;
@@ -769,6 +1035,7 @@ window.Game = {
         }
     },
 
+    /** Dibuja zombis, aplicando efectos de luz y filtros según visibilidad. */
     drawEnemies(ctx) {
         this.enemies.forEach(e => {
             if (!this.isPointInLight(e.x, e.y)) return;
@@ -825,6 +1092,7 @@ window.Game = {
         });
     },
 
+    /** Dibuja al jugador usando sprite o fallback vectorial, con brillo según luz. */
     drawPlayer(ctx) {
         const pImg = this.assets.soldier;
         const lf = this.lightFactorAt(this.player.x, this.player.y);
@@ -892,10 +1160,15 @@ window.Game = {
         }
     },
 
-  // Rect iluminado
+    /** Devuelve si el centro de un rectángulo cae dentro del cono de luz. */
   isRectInLight(r){ if(!r) return false; return this.isPointInLight(r.x + r.w/2, r.y + r.h/2); },
 
-  // Spawn múltiple
+    /**
+     * Genera un lote de zombis alrededor del jugador a cierta distancia.
+     * @param {number} count cantidad a intentar spawnear.
+     * @param {number} [minDist]
+     * @param {number} [maxDist]
+     */
         spawnBurst(count, minDist = 650, maxDist = 1000) {
             for (let n = 0; n < count; n++) {
                 if (this.enemies.length >= this.maxEnemies) break;
@@ -913,8 +1186,8 @@ window.Game = {
                 this.enemies.push(new Enemy(x, y, Math.floor(Math.random() * 5)));
             }
         },
-
-        // Spawn individual
+    // Spawn individual
+    /** Intenta spawnear un zombi en una zona válida del laberinto. */
         spawnEnemy() {
             if (this.enemies.length >= this.maxEnemies) return;
 
@@ -927,6 +1200,7 @@ window.Game = {
             }
         },
 
+        /** Comprueba si una posición es válida para spawnear un zombi. */
         isValidEnemySpawn(x, y) {
             if (Math.hypot(x - this.player.x, y - this.player.y) < GAME_CONSTANTS.ENEMY.MIN_SPAWN_DIST) return false;
             if (this.isPointInLight(x, y)) return false;
@@ -937,14 +1211,73 @@ window.Game = {
             return true;
         },
 
-    // Daño
+    /** Aplica daño al jugador y dispara el sonido correspondiente. */
     damagePlayer(a){ try{ if(Audio && Audio.playPlayerHit) Audio.playPlayerHit(); }catch(_){ } this.player.lives-=a; if(this.player.lives<=0) this.setGameOver('Derrotado'); },
 
-    // Game Over / Victoria (con audio de eventos)
-    setGameOver(msg){ const t=document.querySelector('#gameover-screen h1'); const d=document.querySelector('#gameover-screen p'); if(t) t.textContent='GAME OVER'; if(d) d.textContent=msg||'Has caído.'; try{Audio.playDefeat();}catch(_){ } this.setState('GAMEOVER'); },
-    setVictory(){ const t=document.querySelector('#gameover-screen h1'); const d=document.querySelector('#gameover-screen p'); if(t) t.textContent='VICTORIA'; if(d) d.textContent='Escapaste.'; try{Audio.playVictory();}catch(_){ } this.setState('VICTORY'); },
+    // Game Over / Victoria (con cálculo de score final y high score)
+    /**
+     * Calcula el score final, aplica bonus por tiempo, persiste y muestra
+     * el resumen de puntuación y high score.
+     * @param {boolean} isVictory indica si se llegó por victoria o derrota.
+     */
+    _finalizeScoreAndHighScore(isVictory){
+        try {
+            const msgEl = document.getElementById('gameover-message');
+            const titleEl = document.querySelector('#gameover-screen h1');
+            const summaryEl = document.getElementById('gameover-score-summary');
 
-  // Alertas
+            // Si es victoria: sumar puntos por tiempo restante
+            if (isVictory) {
+                const remaining = Math.max(0, GAME_CONSTANTS.MAX_GAME_TIME + this.bonusTime - this.gameTime);
+                const bonus = Math.floor(remaining) * 5; // 5 puntos por segundo restante
+                this.score += bonus;
+            }
+
+            // Actualizar high score persistente
+            let prev = this.highScore || 0;
+            if (this.score > prev) {
+                prev = this.score;
+                this.highScore = this.score;
+                try { localStorage.setItem('cripta47_highscore', String(this.highScore)); } catch (_) {}
+            }
+
+            // Construir mensaje de resumen (separado del mensaje principal)
+            const summary = `Puntuación: ${this.score}  |  Mejor puntuación: ${prev}`;
+            if (summaryEl) summaryEl.textContent = summary;
+
+            // Asegurar título coherente
+            if (titleEl && isVictory) titleEl.textContent = 'VICTORIA';
+            if (titleEl && !isVictory) titleEl.textContent = 'GAME OVER';
+        } catch (_) {}
+    },
+
+    /** Termina la partida por derrota y muestra pantalla de GAME OVER. */
+    setGameOver(msg){
+        const t=document.querySelector('#gameover-screen h1');
+        const d=document.querySelector('#gameover-screen p');
+        if(t) t.textContent='GAME OVER';
+        if(d) d.textContent=msg||'Has caído.';
+        try{Audio.playDefeat();}catch(_){ }
+        this._finalizeScoreAndHighScore(false);
+        this.setState('GAMEOVER');
+    },
+
+    /** Termina la partida por victoria y muestra pantalla de VICTORIA. */
+    setVictory(){
+        const t=document.querySelector('#gameover-screen h1');
+        const d=document.querySelector('#gameover-screen p');
+        if(t) t.textContent='VICTORIA';
+        if(d) d.textContent='Escapaste.';
+        try{Audio.playVictory();}catch(_){ }
+        this._finalizeScoreAndHighScore(true);
+        this.setState('VICTORY');
+    },
+
+    // Alertas
+    /**
+     * Crea un anuncio visual en la capa `#alert-layer` que se autodestruye
+     * después de 6000 ms. Usado para cambios de dificultad y eventos clave.
+     */
   spawnDifficultyAlert(msg){ 
       const layer=document.getElementById('alert-layer'); 
       if(!layer) return; 
@@ -954,18 +1287,26 @@ window.Game = {
       // Estilos más ligeros y sin sombras pesadas para evitar reflujo costoso
       div.style.cssText='background:rgba(180,0,0,0.85);color:#fff;padding:10px 20px;margin:6px 0;border-radius:4px;font-size:16px;font-weight:bold;text-align:center;';
       layer.appendChild(div); 
-      // Usamos un tiempo de vida ligeramente menor para reducir tiempo en pantalla
-      setTimeout(()=>div.remove(),1800); 
+      // Tiempo de vida del anuncio: 6000 ms (6 segundos)
+      setTimeout(()=>div.remove(),6000); 
   },
-  spawnDifficultyAlertOnce(msg){ const now=performance.now?performance.now():Date.now(); const last=this.lastAlerts[msg]||0; if(now-last < this.alertCooldownMs) return; this.lastAlerts[msg]=now; this.spawnDifficultyAlert(msg); },
+    spawnDifficultyAlertOnce(msg){ const now=performance.now?performance.now():Date.now(); const last=this.lastAlerts[msg]||0; if(now-last < this.alertCooldownMs) return; this.lastAlerts[msg]=now; this.spawnDifficultyAlert(msg); },
 
-    // Laberinto
+        // Laberinto
+        /** Devuelve la lista actual de paredes del laberinto. */
     getWalls(){ return this.walls && this.walls.length ? this.walls : MAP.walls; },
+        /** Posición de inicio del jugador dentro del laberinto procedural. */
     getMazeStartPosition(){
         // Punto de partida cerca de la esquina superior izquierda del laberinto procedural
         const cell=64, margin=40;
         return {x: margin+cell*1+cell/2, y: margin+cell*1+cell/2};
     },
+    /**
+     * Genera un laberinto tipo grid usando un algoritmo DFS con aperturas
+     * adicionales, a partir de una semilla reproducible.
+     * @param {string} seed semilla para el generador pseudoaleatorio.
+     * @returns {{x:number,y:number,w:number,h:number}[]} lista de rectángulos pared.
+     */
     generateMazeWallsSeeded(seed){
         const margin=40, cell=64;
         const cols=Math.floor((GAME_CONSTANTS.WORLD_WIDTH - margin*2)/cell);
@@ -1038,18 +1379,35 @@ window.Game = {
         }
         return walls;
     },
-  seedStringToInt(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h*31 + str.charCodeAt(i))>>>0; } return h; },
-  seededRandomFactory(seed){ let s=seed>>>0; return ()=>{ s^=s<<13; s^=s>>>17; s^=s<<5; s=s>>>0; return (s & 0xffffffff)/0x100000000; }; },
+    seedStringToInt(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h*31 + str.charCodeAt(i))>>>0; } return h; },
+    seededRandomFactory(seed){ let s=seed>>>0; return ()=>{ s^=s<<13; s^=s>>>17; s^=s<<5; s=s>>>0; return (s & 0xffffffff)/0x100000000; }; },
 
-  // Utilidades espaciales
-  rectContainsPoint(r,x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; },
-  pointInsideAnyWall(x,y){ for(const w of this.getWalls()) if(this.rectContainsPoint(w,x,y)) return true; return false; },
-  rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
-  randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){ for(let i=0;i<200;i++){ const x=minX+Math.random()*(maxX-minX); const y=minY+Math.random()*(maxY-minY); if(this.pointInsideAnyWall(x,y)) continue; return {x,y}; } return null; },
+    // Utilidades espaciales
+    rectContainsPoint(r,x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; },
+    pointInsideAnyWall(x,y){ for(const w of this.getWalls()) if(this.rectContainsPoint(w,x,y)) return true; return false; },
+    rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
+        randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){
+                for(let i=0;i<220;i++){
+                        const x=minX+Math.random()*(maxX-minX);
+                        const y=minY+Math.random()*(maxY-minY);
+
+                        // No colocar dentro de muros
+                        if(this.pointInsideAnyWall(x,y)) continue;
+
+                        // No colocar pegado al borde derecho/inferior
+                        if(x>GAME_CONSTANTS.WORLD_WIDTH-96 || y>GAME_CONSTANTS.WORLD_HEIGHT-96) continue;
+
+                        // Evitar específicamente el corredor sin salida inferior
+                        // (franja horizontal pegada al borde inferior del mundo).
+                        if(y>GAME_CONSTANTS.WORLD_HEIGHT-220) continue;
+
+                        return {x,y};
+                }
+                return null;
+        },
   spawnRandomKeys(n){ const arr=[]; const MIN_PLAYER=600, MIN_BETWEEN=700; while(arr.length<n){ const p=this.randomClearPoint(); if(!p) break; if(Math.hypot(p.x-this.player.x,p.y-this.player.y) < MIN_PLAYER) continue; let ok=true; for(const k of arr){ if(Math.hypot(p.x-k.x,p.y-k.y) < MIN_BETWEEN){ ok=false; break; } } if(!ok) continue; arr.push({x:p.x,y:p.y,collected:false,progress:0,capturing:false}); } return arr; },
-  spawnRandomExit(){ const W=100,H=80; for(let i=0;i<200;i++){ const p=this.randomClearPoint(); if(!p) break; const rect={x:p.x-W/2,y:p.y-H/2,w:W,h:H}; if(this.rectOverlapsAnyWall(rect)) continue; if(Math.hypot(rect.x+rect.w/2-this.player.x, rect.y+rect.h/2-this.player.y) < 1000) continue; return rect; } return null; },
 
-  // Manchas sangre
+    // Manchas sangre
   addSplat(x,y){ const splat={x,y,r:16+Math.random()*18,blobs:6+Math.floor(Math.random()*4),rot:Math.random()*Math.PI*2,seed:Math.random()*2,color:COLORS.ENEMY,born:performance.now?performance.now():Date.now(),life:900}; this.splats.push(splat); const now=performance.now?performance.now():Date.now(); this.splats=this.splats.filter(s=> now - s.born < s.life); if(this.splats.length>120) this.splats.shift(); },
     drawSplats(ctx, predicate){ const now=performance.now?performance.now():Date.now(); const test= predicate || (()=>true); for(const s of this.splats){ if(!test(s.x,s.y)) continue; const age=now - s.born; const alpha=0.6*(1-age/s.life); if(alpha<=0) continue; const sx=s.x-this.cameraX, sy=s.y-this.cameraY; ctx.save(); ctx.translate(sx,sy); ctx.rotate(s.rot); ctx.globalAlpha=alpha; ctx.fillStyle=s.color; for(let i=0;i<s.blobs;i++){ const ang=(Math.PI*2)*(i/s.blobs) + s.seed*i*0.25; const rx=Math.cos(ang)*s.r*(0.3+(i%2)*0.4); const ry=Math.sin(ang)*s.r*(0.3+((i+1)%2)*0.4); const rr=s.r*0.25 + Math.random()*s.r*0.25; ctx.beginPath(); ctx.arc(rx,ry,rr,0,Math.PI*2); ctx.fill(); } ctx.restore(); } this.splats=this.splats.filter(s=> now - s.born < s.life); },
   drawBulletsOnTop(ctx){ for(const b of this.bullets){ const hx=b.x-this.cameraX, hy=b.y-this.cameraY; const tx=hx - b.dx*b.length, ty=hy - b.dy*b.length; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='#ffdd57'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(hx,hy); ctx.stroke(); const g=ctx.createRadialGradient(hx,hy,0,hx,hy,10); g.addColorStop(0,'rgba(255,221,87,0.9)'); g.addColorStop(1,'rgba(255,221,87,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(hx,hy,10,0,Math.PI*2); ctx.fill(); ctx.restore(); } },

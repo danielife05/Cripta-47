@@ -2,25 +2,33 @@ import { GAME_CONSTANTS, COLORS } from './level_data.js';
 import { Audio } from './audio.js';
 
 /**
- * Clases de entidad: Player, Enemy, Bullet.
- * Mantienen lógica de movimiento y dibujo vectorial.
+ * Entidad controlada por el jugador.
+ * Encapsula la posición, movimiento, disparo y dibujo del soldado.
  */
-
 export class Player {
+  /**
+   * @param {number} x posición inicial en el mundo (px)
+   * @param {number} y posición inicial en el mundo (px)
+   */
   constructor(x, y) {
     this.x = x; this.y = y;
     this.lives = 3;
-    this.invuln = 0; // breve ventana para evitar múltiples pérdidas por frame
-    this.angle = 0; // ángulo del sprite (dirección de movimiento)
-    this.aimAngle = 0; // ángulo de puntería (hacia el mouse, para disparar)
+    this.invuln = 0;
+    this.angle = 0;
+    this.aimAngle = 0;
     this.fireCooldown = 0;
-    this.keys = 0; // llaves recogidas
-    this.vx = 0; this.vy = 0; // velocidad
-    // Parámetros de dibujo
+    this.keys = 0;
+    this.vx = 0; this.vy = 0;
     this.width = 42;
     this.height = 42;
   }
-  // Actualizar movimiento del jugador, ángulos y disparo
+  /**
+   * Actualiza movimiento, orientación, puntería y disparos del jugador.
+   * @param {number} dt     delta de tiempo en segundos.
+   * @param {import('./input.js').Input} input módulo de entrada compartido.
+   * @param {Bullet[]} bullets array de balas activas donde se añaden disparos.
+   * @param {{x:number,y:number}} camera offset actual de la cámara.
+   */
   update(dt, input, bullets, camera) {
     const maxSpeed = GAME_CONSTANTS.PLAYER.SPEED;
     let ix = 0, iy = 0;
@@ -69,7 +77,11 @@ export class Player {
 
     if (this.invuln > 0) this.invuln -= dt;
   }
-  // Dibujar jugador (forma vectorial) centrado en cámara
+  /**
+   * Dibuja al jugador relativo a la cámara, incluyendo halo de invulnerabilidad.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number}} camera
+   */
   draw(ctx, camera) {
     const sxWorld = this.x - camera.x;
     const syWorld = this.y - camera.y;
@@ -86,21 +98,36 @@ export class Player {
   }
 }
 
+/**
+ * Entidad enemiga básica (zombie).
+ * Se mueve hacia el jugador, puede morir y se dibuja con forma vectorial.
+ */
 export class Enemy {
+  /**
+   * @param {number} x posición inicial del enemigo.
+   * @param {number} y posición inicial del enemigo.
+   * @param {number} [variant=0] variante visual (reservado para futuros usos).
+   */
   constructor(x, y, variant = 0) {
     this.x = x; this.y = y; this.hp = GAME_CONSTANTS.ENEMY.HP;
-    this.state = 'alive'; // alive -> dying -> dead
-    this.deathTimer = 0; // cuenta regresiva para desvanecimiento
+    this.state = 'alive';
+    this.deathTimer = 0;
     this.r = GAME_CONSTANTS.ENEMY.RADIUS;
-    this.variant = variant; // 0..4
+    this.variant = variant;
     this.angle = 0;
   }
-  // Actualizar movimiento del enemigo hacia el jugador
+  /**
+   * Actualiza el movimiento del enemigo hacia el jugador.
+   * @param {number} dt
+   * @param {Player} player objetivo al que seguir.
+   * @param {boolean} isInLight indica si está dentro del cono de luz.
+   * @param {number} [speedScale=1] factor global de velocidad (dificultad).
+   */
   update(dt, player, isInLight, speedScale=1) {
     if(this.state === 'dying'){
       this.deathTimer -= dt;
       if(this.deathTimer <= 0){ this.state = 'dead'; }
-      return; // no se mueve mientras muere
+      return;
     }
     if(this.state !== 'alive') return;
     const base = isInLight ? GAME_CONSTANTS.ENEMY.SPEED_LIGHT : GAME_CONSTANTS.ENEMY.SPEED_DARK;
@@ -113,12 +140,19 @@ export class Enemy {
     this.y += vy * dt;
     this.angle = Math.atan2(vy, vx);
   }
+  /**
+   * Marca al enemigo para morir con una animación de desvanecimiento.
+   */
   kill(){
     if(this.state !== 'alive') return;
     this.state = 'dying';
-    this.deathTimer = 1.2; // segundos para desvanecerse
+    this.deathTimer = 1.2;
   }
-  // Dibujar enemigo (forma vectorial)
+  /**
+   * Dibuja al enemigo relativo a la cámara, con fade si está muriendo.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number}} camera
+   */
   draw(ctx, camera) {
     const sx = this.x - camera.x;
     const sy = this.y - camera.y;
@@ -138,7 +172,6 @@ export class Enemy {
     ctx.strokeStyle = 'rgba(0,0,0,0.45)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // brillo tenue cuando está en luz (solo se dibuja en luz en render principal)
     ctx.globalCompositeOperation = 'lighter';
     const g = ctx.createRadialGradient(0,0, this.r*0.1, 0,0,this.r);
     g.addColorStop(0,'rgba(255,255,255,0.35)');
@@ -149,18 +182,36 @@ export class Enemy {
   }
 }
 
+/**
+ * Proyectil disparado por el jugador.
+ * Se mueve en línea recta y tiene una vida corta.
+ */
 export class Bullet {
-  // Proyectil: x,y cabeza; dirx,diry unitario; speed px/s; length px
+  /**
+   * @param {number} x posición inicial de la cabeza de la bala.
+   * @param {number} y posición inicial de la cabeza de la bala.
+   * @param {number} dirx vector dirección X unitario.
+   * @param {number} diry vector dirección Y unitario.
+   * @param {number} speed velocidad en píxeles por segundo.
+   * @param {number} damage daño que inflige al impactar.
+   */
   constructor(x, y, dirx, diry, speed, damage) {
     this.x=x; this.y=y; this.dx=dirx; this.dy=diry; this.speed=speed; this.damage=damage; this.life=0.3; this.length=24;
   }
-  // Actualizar movimiento/vida del proyectil
+  /**
+   * Actualiza posición y tiempo de vida del proyectil.
+   * @param {number} dt
+   */
   update(dt) {
     this.x += this.dx * this.speed * dt;
     this.y += this.dy * this.speed * dt;
     this.life -= dt;
   }
-  // Dibujar proyectil como trazo luminoso
+  /**
+   * Dibuja el proyectil como un trazo luminoso relativo a la cámara.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number}} camera
+   */
   draw(ctx, camera) {
     const hx = this.x - camera.x;
     const hy = this.y - camera.y;
