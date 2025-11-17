@@ -6,6 +6,9 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
+    <meta name="description"
+      content="Cripta 47: shooter top-down en una cripta oscura. Recolecta las 3 llaves, sobrevive a la horda y escapa antes de que el tiempo se agote."
+    />
     <title>Cripta 47: El Amanecer de las Sombras</title>
     <link rel="stylesheet" href="./styles/style.css" />
   </head>
@@ -63,7 +66,7 @@
         <div class="hud-bottom-left">
           <div id="hud-mute" class="mute-indicator hidden" aria-label="Sonido silenciado">🔇</div>
         </div>
-        <div id="hud-alert" class="hidden">¡ADVERTENCIA! ¡La horda se está volviendo más rápida!</div>
+        <div id="hud-alert" class="hidden" role="status">¡ADVERTENCIA! ¡La horda se está volviendo más rápida!</div>
       </div>
 
       <!-- Pantalla de instrucciones -->
@@ -73,8 +76,9 @@
           <p class="instr-section-title">Objetivo</p>
           <p>
             Explora la cripta, <strong>recolecta las 3 llaves</strong> dispersas por el laberinto
-            y luego regresa al <strong>punto de partida</strong> para abrir la puerta de escape
-            antes de que el tiempo se agote.
+            y luego regresa al <strong>punto de partida</strong> para abrir la puerta de escape.
+            Al conseguir las 3 llaves obtendrás tiempo extra para lograrlo antes de que el
+            contador llegue a cero.
           </p>
 
           <p class="instr-section-title">Controles</p>
@@ -112,7 +116,7 @@
           <p id="gameover-message">Has sido eliminado.</p>
           <div id="gameover-score-summary"></div>
           <div class="gameover-buttons">
-            <button id="restart-button">MENÚ PRINCIPAL</button>
+            <button id="restart-button" class="secondary-btn">MENÚ PRINCIPAL</button>
           </div>
         </div>
         <div class="scanlines"></div>
