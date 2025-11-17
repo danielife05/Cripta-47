@@ -708,6 +708,9 @@ window.Game = {
     this.drawPlayer(ctx);
     this.drawBulletsOnTop(ctx);
 
+    // Minimapa simple (solo para pruebas: jugador, llaves y puerta)
+    this.drawDebugMiniMap(ctx);
+
     // Mostrar contador de FPS opcional
     if (this.showFPS) {
         ctx.save();
@@ -719,6 +722,68 @@ window.Game = {
         ctx.restore();
     }
   },
+
+    /**
+     * Minimapa muy simple para depuración: muestra la posición del jugador,
+     * las llaves sin recoger y la puerta (si existe) sobre una miniatura
+     * del mundo completo en la esquina superior derecha.
+     */
+    drawDebugMiniMap(ctx) {
+        if (!this.canvas || !this.player) return;
+
+        const worldW = GAME_CONSTANTS.WORLD_WIDTH;
+        const worldH = GAME_CONSTANTS.WORLD_HEIGHT;
+        const mapW = 180;
+        const mapH = 120;
+        const padding = 10;
+        const x0 = this.canvas.width - mapW - padding;
+        const y0 = padding;
+
+        ctx.save();
+
+        // Fondo del minimapa
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(x0, y0, mapW, mapH);
+
+        // Borde
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0 + 0.5, y0 + 0.5, mapW - 1, mapH - 1);
+
+        const scaleX = mapW / worldW;
+        const scaleY = mapH / worldH;
+
+        // Jugador
+        const px = x0 + this.player.x * scaleX;
+        const py = y0 + this.player.y * scaleY;
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Llaves sin recoger
+        ctx.fillStyle = '#facc15';
+        for (const k of this.keys) {
+            if (k.collected) continue;
+            const kx = x0 + k.x * scaleX;
+            const ky = y0 + k.y * scaleY;
+            ctx.fillRect(kx - 2, ky - 2, 4, 4);
+        }
+
+        // Puerta de salida
+        if (this.exit) {
+            const ex = x0 + (this.exit.x + this.exit.w / 2) * scaleX;
+            const ey = y0 + (this.exit.y + this.exit.h / 2) * scaleY;
+            ctx.fillStyle = '#60a5fa';
+            ctx.beginPath();
+            ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    },
     // Luz (cono) - mejora de visibilidad general
     /**
      * Dibuja el cono de luz del jugador y oscurece el resto de la escena
@@ -1321,7 +1386,7 @@ window.Game = {
   rectContainsPoint(r,x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; },
   pointInsideAnyWall(x,y){ for(const w of this.getWalls()) if(this.rectContainsPoint(w,x,y)) return true; return false; },
   rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
-  randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){ for(let i=0;i<200;i++){ const x=minX+Math.random()*(maxX-minX); const y=minY+Math.random()*(maxY-minY); if(this.pointInsideAnyWall(x,y)) continue; return {x,y}; } return null; },
+    randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){ for(let i=0;i<200;i++){ const x=minX+Math.random()*(maxX-minX); const y=minY+Math.random()*(maxY-minY); if(this.pointInsideAnyWall(x,y)) continue; if(x>GAME_CONSTANTS.WORLD_WIDTH-96 || y>GAME_CONSTANTS.WORLD_HEIGHT-96) continue; return {x,y}; } return null; },
   spawnRandomKeys(n){ const arr=[]; const MIN_PLAYER=600, MIN_BETWEEN=700; while(arr.length<n){ const p=this.randomClearPoint(); if(!p) break; if(Math.hypot(p.x-this.player.x,p.y-this.player.y) < MIN_PLAYER) continue; let ok=true; for(const k of arr){ if(Math.hypot(p.x-k.x,p.y-k.y) < MIN_BETWEEN){ ok=false; break; } } if(!ok) continue; arr.push({x:p.x,y:p.y,collected:false,progress:0,capturing:false}); } return arr; },
 
     // Manchas sangre
