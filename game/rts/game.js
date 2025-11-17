@@ -539,7 +539,7 @@ window.Game = {
 
         // Cuando el jugador consiga las 3 llaves por primera vez:
         // - Aparece la puerta en la posición de partida
-        // - Se añaden 3 minutos extra al contador
+        // - Se añade 1 minuto extra al contador
         if (this.player.keys === 3 && !this.bonusApplied) {
             this.bonusApplied = true;
             this.bonusTime += 60; // +1 minuto
@@ -559,7 +559,7 @@ window.Game = {
                 try { Audio.playDoorSpawn(); } catch (_) {}
             }
             // Mensaje específico de tercera llave (sin repetir "llave obtenida")
-            this.spawnDifficultyAlertOnce('Todas las llaves conseguidas. La puerta te espera en el punto de partida. Tienes 3 minutos extra para escapar.');
+            this.spawnDifficultyAlertOnce('Todas las llaves conseguidas. La puerta te espera en el punto de partida. Tienes 1 minuto extra para escapar.');
         }
     },
 
@@ -709,7 +709,7 @@ window.Game = {
     this.drawBulletsOnTop(ctx);
 
     // Minimapa simple (solo para pruebas: jugador, llaves y puerta)
-    this.drawDebugMiniMap(ctx);
+    // this.drawDebugMiniMap(ctx);
 
     // Mostrar contador de FPS opcional
     if (this.showFPS) {
@@ -1383,10 +1383,28 @@ window.Game = {
     seededRandomFactory(seed){ let s=seed>>>0; return ()=>{ s^=s<<13; s^=s>>>17; s^=s<<5; s=s>>>0; return (s & 0xffffffff)/0x100000000; }; },
 
     // Utilidades espaciales
-  rectContainsPoint(r,x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; },
-  pointInsideAnyWall(x,y){ for(const w of this.getWalls()) if(this.rectContainsPoint(w,x,y)) return true; return false; },
-  rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
-    randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){ for(let i=0;i<200;i++){ const x=minX+Math.random()*(maxX-minX); const y=minY+Math.random()*(maxY-minY); if(this.pointInsideAnyWall(x,y)) continue; if(x>GAME_CONSTANTS.WORLD_WIDTH-96 || y>GAME_CONSTANTS.WORLD_HEIGHT-96) continue; return {x,y}; } return null; },
+    rectContainsPoint(r,x,y){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; },
+    pointInsideAnyWall(x,y){ for(const w of this.getWalls()) if(this.rectContainsPoint(w,x,y)) return true; return false; },
+    rectOverlapsAnyWall(R){ for(const w of this.getWalls()){ if(!(R.x+R.w < w.x || R.x > w.x+w.w || R.y+R.h < w.y || R.y > w.y+w.h)) return true; } return false; },
+        randomClearPoint(minX=60,minY=60,maxX=GAME_CONSTANTS.WORLD_WIDTH-60,maxY=GAME_CONSTANTS.WORLD_HEIGHT-60){
+                for(let i=0;i<220;i++){
+                        const x=minX+Math.random()*(maxX-minX);
+                        const y=minY+Math.random()*(maxY-minY);
+
+                        // No colocar dentro de muros
+                        if(this.pointInsideAnyWall(x,y)) continue;
+
+                        // No colocar pegado al borde derecho/inferior
+                        if(x>GAME_CONSTANTS.WORLD_WIDTH-96 || y>GAME_CONSTANTS.WORLD_HEIGHT-96) continue;
+
+                        // Evitar específicamente el corredor sin salida inferior
+                        // (franja horizontal pegada al borde inferior del mundo).
+                        if(y>GAME_CONSTANTS.WORLD_HEIGHT-220) continue;
+
+                        return {x,y};
+                }
+                return null;
+        },
   spawnRandomKeys(n){ const arr=[]; const MIN_PLAYER=600, MIN_BETWEEN=700; while(arr.length<n){ const p=this.randomClearPoint(); if(!p) break; if(Math.hypot(p.x-this.player.x,p.y-this.player.y) < MIN_PLAYER) continue; let ok=true; for(const k of arr){ if(Math.hypot(p.x-k.x,p.y-k.y) < MIN_BETWEEN){ ok=false; break; } } if(!ok) continue; arr.push({x:p.x,y:p.y,collected:false,progress:0,capturing:false}); } return arr; },
 
     // Manchas sangre
