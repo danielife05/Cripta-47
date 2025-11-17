@@ -1,7 +1,15 @@
 /**
- * Sistema de Audio con WebAudio API.
- * Maneja carga de buffers, loops de menú/juego y efectos (llaves, salida,
- * victoria/derrota) además de ambient aleatorio y disparadores por proximidad.
+ * Sistema de audio global del juego.
+ *
+ * Responsabilidades principales:
+ * - Inicializar Web Audio API y un master gain común.
+ * - Cargar todos los buffers de sonido (música, SFX, ambiente).
+ * - Gestionar loops de menú / partida y efectos puntuales.
+ * - Ofrecer un único punto de muteo global (tecla R).
+ * - Disparar sonidos contextuales (proximidad de zombies, daño, llaves, etc.).
+ *
+ * Nota: expone un objeto singleton `Audio` que se importa desde el módulo
+ *       de juego y unidades. Toda la lógica de sonido debe pasar por aquí.
  */
 export const Audio = {
   ctx: null,
@@ -16,6 +24,10 @@ export const Audio = {
   proximityThreshold: 0.78,
   loadPromises: [],
 
+  /**
+   * Inicializa el contexto de audio y programa la carga de todos los clips.
+   * Debe llamarse una vez; llamadas posteriores son no-op.
+   */
   init() {
     if (this.initialized) return;
     try {
@@ -37,11 +49,8 @@ export const Audio = {
       openExit: 'assets/audio/openExit.mp3',
       win: 'assets/audio/win.mp3',
       lose: 'assets/audio/lose.mp3',
-      // efecto de disparo
       shoot: 'assets/audio/shoot.mp3',
-      // efecto de daño al jugador
       playerHit: 'assets/audio/playerHit.mp3',
-      // efecto de muerte de zombie (usa uno; puedes añadir más variantes luego)
       zombieDie: 'assets/audio/zombieDie.mp3',
     };
 
@@ -50,6 +59,11 @@ export const Audio = {
     ['ambienceZombie1', 'ambienceZombie2', 'apZombie1', 'apZombie2', 'apZombie3']
       .forEach(name => this.loadAudio(name, `assets/audio/${name}.mp3`));
   },
+  /**
+   * Registra la carga de un archivo de audio y almacena su buffer cuando termina.
+   * @param {string} name  nombre lógico del clip (clave en `buffers`).
+   * @param {string} url   ruta relativa al asset de audio.
+   */
   loadAudio(name, url) {
     const p = fetch(url)
       .then(r => r.arrayBuffer())
@@ -60,10 +74,24 @@ export const Audio = {
     this.loadPromises.push(p);
   },
 
+  /**
+   * Devuelve una promesa que se resuelve cuando todos los clips registrados
+   * han terminado de intentar cargarse (con o sin éxito).
+   */
   ready() {
     return Promise.all(this.loadPromises);
   },
 
+  /**
+   * Reproduce un clip ya cargado.
+   * @param {string} name              clave del buffer en `buffers`.
+   * @param {Object} [opts]
+   * @param {boolean} [opts.loop=false] si debe repetir en bucle.
+   * @param {number} [opts.volume=1]    volumen lineal (0..1) relativo al master.
+   * @param {number} [opts.fadeIn=0]    tiempo de fade-in en ms.
+   * @param {number} [opts.rate=1]      factor de pitch / velocidad.
+   * @returns {AudioBufferSourceNode|null} la fuente creada o null si no se pudo.
+   */
   play(name, { loop = false, volume = 1, fadeIn = 0, rate = 1 } = {}) {
     if (!this.initialized || !this.buffers[name]) return null;
 
@@ -91,6 +119,11 @@ export const Audio = {
     return src;
   },
 
+  /**
+   * Aplica un fade-out lineal al nodo de audio dado y lo detiene al final.
+   * @param {AudioBufferSourceNode} src
+   * @param {number} [ms=600] duración del fade en milisegundos.
+   */
   fadeOut(src, ms = 600) {
     if (!src || !src._gainNode) return;
     const gain = src._gainNode;
@@ -101,6 +134,10 @@ export const Audio = {
     setTimeout(() => { try { src.stop(); } catch (_) {} }, ms + 50);
   },
 
+  /**
+   * Alterna el mute global del juego.
+   * Actualiza tanto la ganancia master como el icono visual del HUD.
+   */
   toggleMute() {
     if (!this.initialized || !this.master) return;
     this.muted = !this.muted;
@@ -112,6 +149,10 @@ export const Audio = {
     } catch (_) {}
   },
 
+  /**
+   * Inicia la música de menú en bucle.
+   * Detiene cualquier loop de juego o efectos especiales activos.
+   */
   playMenuAmbient() {
     this.ensureInit();
     this.stopGameLoop();
@@ -129,6 +170,10 @@ export const Audio = {
       .catch(() => {});
   },
 
+  /**
+   * Inicia la música de partida en bucle.
+   * Detiene música de menú y efectos especiales anteriores.
+   */
   playGameAmbient() {
     this.ensureInit();
     this.stopMenu();
@@ -137,46 +182,71 @@ export const Audio = {
     this.gameLoop = this.play('game', { loop: true, volume: 0.32, fadeIn: 900 });
   },
 
+  /**
+   * Aplica un fade y detiene el loop de música de juego si existe.
+   */
   stopGameLoop() {
     if (!this.gameLoop) return;
     this.fadeOut(this.gameLoop, 800);
     this.gameLoop = null;
   },
 
+  /**
+   * Aplica un fade y detiene el loop de música de menú si existe.
+   */
   stopMenu() {
     if (!this.begin) return;
     this.fadeOut(this.begin, 600);
     this.begin = null;
   },
 
+  /**
+   * Efecto al recoger una llave.
+   */
   playKeyPickup() {
     this.ensureInit();
     if (this.buffers.keys) this.play('keys', { volume: 0.85 });
   },
 
+  /**
+   * Efecto cuando aparece la puerta de salida.
+   */
   playDoorSpawn() {
     this.ensureInit();
     this.appearExitNode = this.play('appearExit', { volume: 0.85 });
   },
 
+  /**
+   * Efecto cuando se abre completamente la puerta de salida.
+   * También detiene el loop de juego actual.
+   */
   playExitOpen() {
     this.ensureInit();
     this.stopGameLoop();
     this.openExitNode = this.play('openExit', { volume: 1 });
   },
 
+  /**
+   * Música de victoria al escapar con éxito.
+   */
   playVictory() {
     this.ensureInit();
     this.stopGameLoop();
     this.winNode = this.play('win', { volume: 1 });
   },
 
+  /**
+   * Música de derrota al morir o agotar el tiempo.
+   */
   playDefeat() {
     this.ensureInit();
     this.stopGameLoop();
     this.loseNode = this.play('lose', { volume: 1 });
   },
-  // Zombie ambient aleatorio
+  /**
+   * Reproduce de forma pseudoaleatoria gruñidos/zumbidos de zombies
+   * a intervalos amplios, para dar ambiente sonoro.
+   */
   updateZombieAmbient(dt) {
     if (!this.initialized) return;
     this.zombieAmbientTimer += dt;
@@ -191,7 +261,11 @@ export const Audio = {
     this.nextZombieAmbient = this.zombieAmbientTimer + (10 + Math.random() * 14);
   },
 
-  // Proximidad extrema zombie (apZombie*)
+  /**
+   * Dispara un gruñido intenso cuando la proximidad de zombies al jugador
+   * supera cierto umbral.
+   * @param {number} f factor de proximidad normalizado 0..1.
+   */
   setThreatProximity(f) {
     if (!this.initialized) return;
     if (f < this.proximityThreshold) return;
@@ -207,6 +281,10 @@ export const Audio = {
     }
   },
 
+  /**
+   * Detiene con fade todos los sonidos especiales (victoria, derrota,
+   * puerta, aparición de salida) que puedan estar activos.
+   */
   stopSpecials() {
     ['winNode', 'loseNode', 'openExitNode', 'appearExitNode'].forEach(key => {
       const node = this[key];
@@ -216,6 +294,10 @@ export const Audio = {
     });
   },
 
+  /**
+   * Resetea el estado interno del sistema de audio asociado a una partida
+   * (timers de ambiente y efectos especiales), sin cerrar el contexto.
+   */
   resetGame() {
     this.zombieAmbientTimer = 0;
     this.nextZombieAmbient = 0;
@@ -223,7 +305,10 @@ export const Audio = {
     this.stopSpecials();
   },
 
-  // Reproducir disparo con ligera aleatoriedad para evitar monotonía
+  /**
+   * Disparo del jugador con ligera variación de volumen y pitch para
+   * evitar que suene exactamente igual en todos los tiros.
+   */
   playShoot() {
     this.ensureInit();
     if (!this.buffers.shoot) return;
@@ -232,7 +317,10 @@ export const Audio = {
     this.play('shoot', { volume: vol, rate });
   },
 
-  // Sonido de daño al jugador
+  /**
+   * Sonido de impacto cuando el jugador recibe daño.
+   * Si falta el clip dedicado, usa un conjunto de alternativos suaves.
+   */
   playPlayerHit() {
     this.ensureInit();
     if (this.buffers.playerHit) {
@@ -244,7 +332,10 @@ export const Audio = {
     if (alt) this.play(alt, { volume: 0.5 });
   },
 
-  // Sonido al morir un zombie
+  /**
+   * Sonido de muerte de zombie. Si el clip dedicado no está disponible
+   * recurre a un conjunto de efectos alternativos.
+   */
   playZombieDeath() {
     this.ensureInit();
     if (this.buffers.zombieDie) {
@@ -258,6 +349,10 @@ export const Audio = {
     if (alt) this.play(alt, { volume: 0.45 });
   },
 
+  /**
+   * Garantiza que el contexto de audio esté inicializado y, si está
+   * suspendido por el navegador, intenta reanudarlo.
+   */
   ensureInit() {
     if (!this.initialized) this.init();
     if (this.ctx && this.ctx.state === 'suspended') {
@@ -265,6 +360,10 @@ export const Audio = {
     }
   },
 
+  /**
+   * Devuelve aleatoriamente uno de los nombres cuyo buffer esté cargado.
+   * Si ninguno existe, devuelve null.
+   */
   pickLoaded(names) {
     const loaded = names.filter(n => this.buffers[n]);
     if (!loaded.length) return null;

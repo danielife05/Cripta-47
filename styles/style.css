@@ -5,25 +5,21 @@ body {
     background: #000;
     font-family: 'Courier New', monospace;
     color: white;
-    /* Evita el scroll innecesario */
     user-select: none;
-    /* Deshabilita la selección de texto */
     -webkit-tap-highlight-color: transparent;
-    /* Mejora la experiencia táctil */
 }
 
 #game {
     display: block;
-    margin: 0 auto; /* centrar horizontalmente */
+    margin: 0 auto;
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%); /* centrar en pantalla */
+    transform: translate(-50%, -50%);
     border: 1px solid #444;
-    background: #16191f; /* un poco más claro */
-    /* CRÍTICO: El canvas debe estar DETRÁS de los overlays */
+    background: #16191f;
     z-index: 1;
-    pointer-events: none; /* El canvas no debe capturar eventos cuando hay overlays */
+    pointer-events: none;
 }
 
 #game-container {
@@ -32,7 +28,6 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    /* CRÍTICO: Permitir pointer events en el contenedor para que los botones funcionen */
     pointer-events: auto;
     z-index: 50;
 }
@@ -45,7 +40,7 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.85);
     color: white;
-    display: none; /* Por defecto oculto */
+    display: none;
     flex-direction: column;
     justify-content: center;
     align-items: center;
@@ -175,7 +170,6 @@ body {
     font-size: 0.95rem;
 }
 
-/* Ambient orbs */
 .ambient-lights .al{ position:absolute; border-radius:50%; filter: blur(28px); opacity:0.35; z-index: 90; }
 .ambient-lights .orb1{ width:420px; height:420px; left:-120px; top:-120px; background: radial-gradient(circle, rgba(150,30,30,0.55), rgba(150,30,30,0)); animation: float1 10s ease-in-out infinite; }
 .ambient-lights .orb2{ width:360px; height:360px; right:-80px; bottom:-60px; background: radial-gradient(circle, rgba(255,60,60,0.42), rgba(255,60,60,0)); animation: float2 12s ease-in-out infinite; }
@@ -184,12 +178,10 @@ body {
 @keyframes float2 { 0%,100%{ transform: translate(0,0); } 50% { transform: translate(-12px,-10px); } }
 @keyframes float3 { 0%,100%{ transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-50%,-50%) scale(1.06); } }
 
-/* CRT scanlines + noise overlay for gritty vibe */
 .scanlines{ position:absolute; inset:0; pointer-events:none; z-index:95; background-image: repeating-linear-gradient(to bottom, rgba(255,100,100,0.03) 0, rgba(255,100,100,0.03) 1px, transparent 1px, transparent 3px); mix-blend-mode: overlay; opacity:0.22; }
 .noise-layer{ position:absolute; inset:0; pointer-events:none; z-index:96; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.07"/></svg>'); opacity:0.15; animation: noiseShift 1.5s steps(2,end) infinite; }
 @keyframes noiseShift { 0%{ transform: translate3d(0,0,0);} 50%{ transform: translate3d(-5px,3px,0);} 100%{ transform: translate3d(0,0,0);} }
 
-/* HUD y Paneles */
 #hud{ position:fixed; inset:0; pointer-events:none; z-index:130; }
 .hud-left{ position:absolute; top:16px; left:16px; display:flex; flex-direction:column; gap:8px; }
 .hud-center{ position:absolute; top:16px; left:50%; transform:translateX(-50%); }
@@ -202,18 +194,14 @@ body {
 .heart.active{ filter: drop-shadow(0 0 6px rgba(255,80,90,0.6)); }
 .key.active{ filter: drop-shadow(0 0 6px rgba(255,220,90,0.6)); }
 
-/* Heart via inline SVG data-URI */
 .heart{
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='%23ff6b6b'/><stop offset='100%' stop-color='%23b11226'/></linearGradient></defs><path d='M32 57s-9.6-8.2-16.2-14.8C9.7 36.1 6 31.6 6 26c0-6.1 4.7-11 10.5-11 4.5 0 7.6 2.4 9.5 5.6C28 17.4 31.1 15 35.6 15 41.3 15 46 19.9 46 26c0 5.6-3.7 10.1-9.8 16.2C41.6 48.8 32 57 32 57z' fill='url(%23g)' stroke='%23ffb3b3' stroke-width='1.2'/></svg>");
     background-size: contain; background-repeat:no-repeat; background-position:center;
 }
 
-/* Keys use existing svg assets; use key1 for all for now */
 .key{ background-image:url('../assets/img/key1.svg'); background-size:contain; background-repeat:no-repeat; background-position:center; }
 
 .timer-badge{ pointer-events:none; background: rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.18); padding:8px 12px; border-radius:10px; color:#fff; font-weight:700; letter-spacing:1px; font-size:1.1rem; box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
-
-/* panel HUD duplicado arriba se mantiene posicionado por regla anterior */
 
 .mute-indicator{
     display:inline-flex;
@@ -229,7 +217,6 @@ body {
     box-shadow:0 4px 12px rgba(0,0,0,0.5);
 }
 
-/* Game Over screen enhancements */
 #gameover-screen {
     display: none;
     justify-content: center;
@@ -271,7 +258,6 @@ body {
     margin-top: 18px;
 }
 
-/* Botones en las pantallas del juego */
 button {
     padding: 12px 24px;
     background: #2a4;
@@ -310,19 +296,16 @@ button:hover {
     transform: translateX(-50%);
     z-index: 1000;
     pointer-events: none;
-    /* evita bloquear clics del juego */
     width: 100%;
     display: flex;
     justify-content: center;
 }
 
-/* permitir interacción dentro del anuncio si la hay */
 #alert-layer>*,
 #hud-alert>* {
     pointer-events: auto;
 }
 
-/* Instrucciones */
 #instructions-screen {
     background: radial-gradient(900px 520px at 50% 10%, rgba(80,20,20,0.7) 0%, rgba(10,2,4,0.96) 60%, #050104 100%);
 }
@@ -366,7 +349,6 @@ button:hover {
     justify-content:flex-end;
 }
 
-/* Pausa */
 .overlay-screen{
     position:absolute;
     inset:0;
@@ -403,7 +385,6 @@ button:hover {
     padding:14px 22px;
     font-size:1.3rem;
     text-shadow:0 0 6px #ff4444;
-    /* Duración alineada con la vida del anuncio en JS (6000 ms) */
     animation: alertFade 4.2s ease-out forwards;
 }
 @keyframes alertFade {
@@ -413,4 +394,4 @@ button:hover {
     100% { opacity:0; }
 }
 
-/* Timer centrado arriba: ahora gestionado por #hud-time en el HUD */
+/* Timer centrado arriba gestionado por #hud-time en el HUD */
